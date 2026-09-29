@@ -287,9 +287,11 @@ class BotManager {
               const rememberCheck = await page.$('#rememberme');
               if (rememberCheck) await rememberCheck.click().catch(() => {});
 
+              await new Promise(r => setTimeout(r, 500));
+
               await Promise.all([
                 page.click('#wp-submit'),
-                page.waitForNavigation({ waitUntil: 'load', timeout: 30000 }).catch(() => {})
+                page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
               ]);
             }
 
@@ -312,7 +314,15 @@ class BotManager {
         console.log(`[Bot ${botId}] Step 2: Navigating to Aula Virtual: ${baseUrl}`);
         dataStore.addBotLog(botId, `Conectando al Aula Virtual...`, 'info');
         await safeGoto(page, baseUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
-        await new Promise(r => setTimeout(r, 2500));
+        // Inyectar CSS global para suprimir permanentemente popups de Elementor
+        await page.addStyleTag({
+          content: '.elementor-popup-modal, .dialog-widget, .dialog-lightbox-widget, .dialog-message { display: none !important; visibility: hidden !important; pointer-events: none !important; }'
+        }).catch(() => {});
+
+        // Cerrar cualquier popup modal de Elementor que ya exista
+        await page.evaluate(() => {
+          document.querySelectorAll('.elementor-popup-modal, .dialog-widget, .dialog-lightbox-widget').forEach(el => el.remove());
+        }).catch(() => {});
 
         // Comprobar si pide DNI por si no estaba logueado
         const dniInput = await page.$('input[name="gc_dni"], input[name="dni"], #gc_dni, #dni');
@@ -324,9 +334,12 @@ class BotManager {
           if (submitDni) {
             await Promise.all([
               submitDni.click(),
-              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
+              page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
             ]);
             await new Promise(r => setTimeout(r, 2000));
+            await page.evaluate(() => {
+              document.querySelectorAll('.elementor-popup-modal, .dialog-widget, .dialog-lightbox-widget').forEach(el => el.remove());
+            }).catch(() => {});
           }
         }
 
@@ -354,12 +367,13 @@ class BotManager {
         const maxWaitMs = 180000;
         const startTime = Date.now();
         let loopCount = 0;
+        let joinButtonClicked = false;
 
         while (Date.now() - startTime < maxWaitMs && !joinedSuccess) {
           loopCount++;
-          
+
           // If after several loops no iframe, try re-clicking #gc-entrar-sala if present
-          if (loopCount % 6 === 0) {
+          if (loopCount % 6 === 0 && !joinButtonClicked) {
             const retryBtn = await page.$('#gc-entrar-sala').catch(() => null);
             if (retryBtn) {
               await retryBtn.click().catch(() => {});
@@ -371,70 +385,67 @@ class BotManager {
 
           if (jitsiFrame) {
             try {
-              // Check if already inside conference room strictly via Jitsi API
+              // 1. Check if already inside conference room strictly via Jitsi APP API
               const isAlreadyJoined = await jitsiFrame.evaluate(() => {
-                return !!(window.APP && window.APP.conference && window.APP.conference.isJoined() === true);
+                if (window.APP && window.APP.conference && typeof window.APP.conference.isJoined === 'function') {
+                  return window.APP.conference.isJoined() === true;
+                }
+                return false;
               }).catch(() => false);
 
               if (isAlreadyJoined) {
-                console.log(`[Bot ${botId}] Already joined in conference!`);
+                console.log(`[Bot ${botId}] ✅ Confirmado: ¡Dentro de la reunión Jitsi!`);
+                dataStore.addBotLog(botId, 'Bot confirmado dentro de la conferencia Jitsi', 'success');
                 joinedSuccess = true;
                 break;
               }
 
-              // Handle prejoin screen: focus input, mute prejoin mic/cam, unlock & click Join button
-              const clickResult = await jitsiFrame.evaluate(() => {
-                const input = document.querySelector('input[type="text"]');
-                if (input) {
-                  input.focus();
-                  input.dispatchEvent(new Event('input', { bubbles: true }));
-                  input.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-
-                // Click prejoin mute buttons if present (NEVER click if already unmute)
-                const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                for (const b of buttons) {
-                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                  if (aria.includes('unmute') || aria.includes('activar') || aria.includes('reactivar')) continue;
-                  if (aria.includes('mute microphone') || aria.includes('silenciar')) {
-                    b.click();
+              // 2. Click prejoin button and let Jitsi enter the conference room
+              if (!joinButtonClicked) {
+                const clickResult = await jitsiFrame.evaluate(() => {
+                  const input = document.querySelector('input[type="text"]');
+                  if (input) {
+                    input.focus();
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
                   }
-                  if (aria.includes('stop camera') || aria.includes('detener cámara')) {
-                    b.click();
+
+                  const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                  for (const b of buttons) {
+                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                    const title = (b.getAttribute('title') || '').toLowerCase();
+                    // Solo silenciar si dice "silenciar" o "mute" (es decir, si estaba encendido)
+                    if ((aria.includes('silenciar') || aria.includes('mute microphone') || title.includes('silenciar')) && !aria.includes('reactivar')) {
+                      b.click();
+                    }
+                    // Solo apagar cámara si dice "detener" o "stop" (es decir, si estaba encendida)
+                    if ((aria.includes('detener') || aria.includes('stop camera') || title.includes('detener')) && !aria.includes('iniciar') && !aria.includes('activar')) {
+                      b.click();
+                    }
                   }
-                }
 
-                // Find Join button
-                const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                const target = btns.find(b => {
-                  const txt = (b.innerText || b.textContent || '').toLowerCase();
-                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                  return txt.includes('unirse') || txt.includes('join') || txt.includes('entrar') || aria.includes('unirse') || aria.includes('join');
-                });
+                  // Find Join button
+                  const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                  const target = btns.find(b => {
+                    const txt = (b.innerText || b.textContent || '').toLowerCase();
+                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                    return txt.includes('entrar a la reunión') || txt.includes('unirse') || txt.includes('join') || txt.includes('entrar') || aria.includes('entrar a la reunión') || aria.includes('unirse') || aria.includes('join');
+                  });
 
-                if (target) {
-                  target.removeAttribute('disabled');
-                  target.disabled = false;
-                  target.click();
-                  return target.innerText || target.textContent || 'Clicked!';
-                }
-                return null;
-              }).catch(() => null);
+                  if (target) {
+                    target.removeAttribute('disabled');
+                    target.disabled = false;
+                    target.click();
+                    return target.innerText || target.textContent || 'Join Clicked';
+                  }
+                  return null;
+                }).catch(() => null);
 
-              if (clickResult) {
-                console.log(`[Bot ${botId}] Clicked prejoin button: ${clickResult}`);
-                await page.keyboard.press('Enter').catch(() => {});
-                dataStore.addBotLog(botId, `Bot hizo clic en botón prejoin "${clickResult}" dentro del iframe Jitsi`, 'info');
-                await new Promise(r => setTimeout(r, 4000));
-                
-                // Confirm joined state
-                const confirmed = await jitsiFrame.evaluate(() => {
-                  return !!(window.APP && window.APP.conference && window.APP.conference.isJoined() === true);
-                }).catch(() => false);
-
-                if (confirmed) {
-                  joinedSuccess = true;
-                  break;
+                if (clickResult) {
+                  joinButtonClicked = true;
+                  console.log(`[Bot ${botId}] Clic en botón de entrada: "${clickResult}"`);
+                  await page.keyboard.press('Enter').catch(() => {});
+                  dataStore.addBotLog(botId, `Bot hizo clic en botón prejoin "${clickResult}". Entrando a la sala...`, 'info');
                 }
               }
             } catch (err) {
