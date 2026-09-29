@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const puppeteer = require('puppeteer');
 const { v4: uuidv4 } = require('uuid');
 const dataStore = require('./dataStore');
@@ -192,9 +193,13 @@ class BotManager {
         launchArgs.push(`--use-file-for-fake-audio-capture=${silenceWavPath}`);
       }
 
+      // Unique isolated browser profile per bot to guarantee 0 session/cookie collisions
+      const botProfileDir = path.join(os.tmpdir(), `bot_profile_${botId}`);
+
       const launchOptions = {
         headless: true,
-        args: launchArgs
+        args: launchArgs,
+        userDataDir: botProfileDir
       };
 
       const execPath = getChromiumExecutablePath();
@@ -259,14 +264,32 @@ class BotManager {
           dataStore.addBotLog(botId, `Iniciando sesión en WordPress (${login})...`, 'info');
           try {
             await page.goto('https://creamosia.com/wp-login.php', { waitUntil: 'networkidle2', timeout: 35000 });
-            await page.type('#user_login', login, { delay: 15 });
-            await page.type('#user_pass', pass, { delay: 15 });
-            await Promise.all([
-              page.click('#wp-submit'),
-              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
-            ]);
+            
+            const userInput = await page.waitForSelector('#user_login', { timeout: 10000 }).catch(() => null);
+            if (userInput) {
+              await page.type('#user_login', login, { delay: 20 });
+              await page.type('#user_pass', pass, { delay: 20 });
+              
+              const rememberCheck = await page.$('#rememberme');
+              if (rememberCheck) await rememberCheck.click().catch(() => {});
+
+              await Promise.all([
+                page.click('#wp-submit'),
+                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
+              ]);
+            }
+
             await new Promise(r => setTimeout(r, 2000));
-            dataStore.addBotLog(botId, `Sesión iniciada como ${login}`, 'success');
+
+            // Verify cookies to confirm valid WordPress session
+            const cookies = await page.cookies();
+            const isAuth = cookies.some(c => c.name.startsWith('wordpress_logged_in_'));
+            if (isAuth) {
+              console.log(`[Bot ${botId}] ✅ Sesión confirmada en WordPress como ${login}`);
+              dataStore.addBotLog(botId, `Sesión iniciada y confirmada como ${login}`, 'success');
+            } else {
+              console.warn(`[Bot ${botId}] ⚠️ Cookie wordpress_logged_in no detectada para ${login}`);
+            }
           } catch (wpLoginErr) {
             console.warn(`[Bot ${botId}] Advertencia al iniciar sesión WP:`, wpLoginErr.message);
           }
@@ -449,6 +472,10 @@ class BotManager {
       // Synchronize assigned IP & User-Agent in WordPress Database (wp_gc_accesos & wp_gc_asistencia)
       if (recordLogin && ipAddress) {
         this.syncWordPressLogs(recordLogin, ipAddress, selectedUserAgent);
+        // Double-sync after 6s to ensure the row in wp_gc_asistencia created by Jitsi/Aula Virtual is populated
+        setTimeout(() => {
+          this.syncWordPressLogs(recordLogin, ipAddress, selectedUserAgent);
+        }, 6000);
       }
 
       // Schedule auto-disconnect if duration is set
@@ -460,10 +487,18 @@ class BotManager {
         }, timeoutMs);
       }
 
-      // Recurring interval to continuously enforce mute state purely via Jitsi Conference API (every 10 seconds)
+      // Recurring interval to keep WordPress attendance ping alive and Jitsi strictly muted (every 10 seconds)
       muteCheckInterval = setInterval(async () => {
         try {
           if (page && !page.isClosed()) {
+            // Keep WordPress Aula Virtual attendance ping alive
+            await page.evaluate(() => {
+              if (typeof window.gc_enviar_ping === 'function') {
+                window.gc_enviar_ping();
+              }
+              window.dispatchEvent(new Event('mousemove'));
+            }).catch(() => {});
+
             const frames = page.frames();
             const jitsiFrame = frames.find(f => f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'));
             if (jitsiFrame) {
@@ -485,7 +520,7 @@ class BotManager {
       }, 10000);
 
       // Keep reference to active instance
-      this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval });
+      this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval, botProfileDir });
 
     } catch (error) {
       console.error(`[Bot ${botId}] Error en intento ${attemptCount}/${maxAttempts}:`, error.message);
@@ -513,7 +548,7 @@ class BotManager {
   async stopBot(botId) {
     const instance = this.activeInstances.get(botId);
     if (instance) {
-      const { browser, timer, muteCheckInterval } = instance;
+      const { browser, timer, muteCheckInterval, botProfileDir } = instance;
       if (timer) clearTimeout(timer);
       if (muteCheckInterval) clearInterval(muteCheckInterval);
       if (browser) {
@@ -522,6 +557,11 @@ class BotManager {
         } catch (e) {
           console.error(`[Bot ${botId}] Error al cerrar navegador:`, e.message);
         }
+      }
+      if (botProfileDir && fs.existsSync(botProfileDir)) {
+        try {
+          fs.rmSync(botProfileDir, { recursive: true, force: true });
+        } catch (e) {}
       }
       this.activeInstances.delete(botId);
     }
