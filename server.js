@@ -1,3 +1,11 @@
+// Sanitize environment variables for Chromium in container environments
+if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+  const rawPath = process.env.PUPPETEER_EXECUTABLE_PATH.trim();
+  if (rawPath && !rawPath.startsWith('/') && !rawPath.includes(':')) {
+    process.env.PUPPETEER_EXECUTABLE_PATH = '/' + rawPath;
+  }
+}
+
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');

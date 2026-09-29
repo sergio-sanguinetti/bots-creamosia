@@ -1,6 +1,32 @@
+const fs = require('fs');
 const puppeteer = require('puppeteer');
 const { v4: uuidv4 } = require('uuid');
 const dataStore = require('./dataStore');
+
+function getChromiumExecutablePath() {
+  let envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (envPath) {
+    envPath = envPath.trim();
+    if (fs.existsSync(envPath)) return envPath;
+    if (!envPath.startsWith('/') && fs.existsSync(`/${envPath}`)) return `/${envPath}`;
+  }
+
+  // Common Linux paths in Docker / Debian / Alpine
+  const candidatePaths = [
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/google-chrome',
+    '/snap/bin/chromium',
+    '/usr/lib/chromium/chromium'
+  ];
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) return p;
+  }
+
+  return undefined;
+}
 
 const USER_AGENTS_POOL = [
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -156,8 +182,9 @@ class BotManager {
         ]
       };
 
-      if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-        launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+      const execPath = getChromiumExecutablePath();
+      if (execPath) {
+        launchOptions.executablePath = execPath;
       }
 
       browser = await puppeteer.launch(launchOptions);
