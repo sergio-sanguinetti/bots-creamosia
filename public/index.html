@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orquestador de Bots | Simulación & Asistencia Jitsi Meet</title>
+
+  <!-- Premium Google Fonts: Plus Jakarta Sans, Outfit & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-robot"></i>
+      </div>
+      <div>
+        <h1>Orquestador de Bots</h1>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="header-tabs">
+      <button class="nav-tab active" data-tab="tab-live">
+        <i class="fa-solid fa-tower-broadcast"></i> Orquestador en Vivo
+      </button>
+      <button class="nav-tab" data-tab="tab-employees">
+        <i class="fa-solid fa-users-gear"></i> Gestión de Trabajadores
+      </button>
+      <button class="nav-tab" data-tab="tab-meetings">
+        <i class="fa-solid fa-calendar-check"></i> Programación de Reuniones
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="dashboard-container">
+
+    <!-- TAB 1: ORQUESTADOR EN VIVO -->
+    <div id="tab-live" class="tab-content active">
+
+      <!-- Top Stats Bar -->
+      <section class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon icon-blue">
+            <i class="fa-solid fa-building"></i>
+          </div>
+          <div class="stat-info">
+            <h3 id="stat-companies">0</h3>
+            <p>Empresas Registradas</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-purple">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <div class="stat-info">
+            <h3 id="stat-courses">0</h3>
+            <p>Cursos Activos</p>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon icon-cyan">
+            <i class="fa-solid fa-users"></i>
+          </div>
+          <div class="stat-info">
+            <h3 id="stat-employees">0</h3>
+            <p>Empleados Disponibles</p>
+          </div>
+        </div>
+
+        <div class="stat-card highlight">
+          <div class="stat-icon icon-green">
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div class="stat-info">
+            <h3 id="stat-active-bots">0</h3>
+            <p>Bots Conectados en Vivo</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Content Layout (Grid 2 Columns) -->
+      <div class="main-grid">
+
+        <!-- Left Column: Data Management & Selection -->
+        <div class="panel-column">
+
+          <!-- Panel 1: Excel Import -->
+          <div class="dashboard-card">
+            <div class="card-header space-between">
+              <div class="title-with-icon">
+                <i class="fa-solid fa-file-import"></i>
+                <h2>1. Carga Masiva de Datos (Excel)</h2>
+              </div>
+              <button id="btn-download-template" class="btn btn-ghost btn-sm">
+                <i class="fa-solid fa-file-arrow-down"></i> Plantilla Excel
+              </button>
+            </div>
+            <div class="card-body">
+              <div id="drop-zone" class="file-drop-zone">
+                <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                <p>Arrastra aquí tu archivo <strong>.xlsx</strong> o <strong>.csv</strong></p>
+                <span class="drop-sub">O haz clic para explorar en tu computadora</span>
+                <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" hidden>
+              </div>
+              <div id="upload-status" class="upload-status"></div>
+            </div>
+          </div>
+
+          <!-- Panel 2: Multi-Select Filters & Employee List -->
+          <div class="dashboard-card">
+            <div class="card-header space-between">
+              <div class="title-with-icon">
+                <i class="fa-solid fa-filter"></i>
+                <h2>2. Selección Múltiple de Empleados</h2>
+              </div>
+              <div class="select-counter-badge">
+                <span id="selected-count">0</span> Seleccionados
+              </div>
+            </div>
+
+            <div class="card-body">
+              <!-- Filters -->
+              <div class="filter-controls-row">
+                <div class="form-group flex-1">
+                  <label><i class="fa-solid fa-building"></i> Empresa:</label>
+                  <select id="filter-company" class="form-control">
+                    <option value="">-- Todas las Empresas --</option>
+                  </select>
+                </div>
+
+                <div class="form-group flex-1">
+                  <label><i class="fa-solid fa-graduation-cap"></i> Curso:</label>
+                  <select id="filter-course" class="form-control">
+                    <option value="">-- Todos los Cursos --</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group margin-top-sm">
+                <div class="search-input-wrapper">
+                  <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                  <input type="text" id="search-employee" class="form-control search-input" placeholder="Buscar por nombre o DNI de empleado...">
+                </div>
+              </div>
+
+              <!-- Action Bar for Selection -->
+              <div class="selection-actions-bar margin-top-sm">
+                <button id="btn-select-all" class="btn btn-outline btn-sm">
+                  <i class="fa-solid fa-square-check"></i> Seleccionar Todos
+                </button>
+                <button id="btn-deselect-all" class="btn btn-ghost btn-sm">
+                  <i class="fa-solid fa-square"></i> Desmarcar Todos
+                </button>
+                <button id="btn-auto-assign-ips" class="btn btn-outline btn-sm margin-left-auto" style="border-color: var(--apple-cyan); color: var(--apple-cyan);">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-asignar IPs
+                </button>
+              </div>
+
+              <!-- Employees Cards Container -->
+              <div id="employee-list" class="employee-cards-grid margin-top-sm">
+                <div class="empty-state">
+                  <i class="fa-solid fa-folder-open"></i>
+                  <p>Carga un archivo Excel para ver la lista de empleados o selecciona los filtros.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Launch Parameters & Bot Monitor -->
+        <div class="panel-column">
+
+          <!-- Panel 3: Session Launch Configuration -->
+          <div class="dashboard-card">
+            <div class="card-header">
+              <i class="fa-solid fa-sliders"></i>
+              <h2>3. Parámetros de la Sesión en Vivo</h2>
+            </div>
+            <div class="card-body">
+              <form id="bot-launch-form">
+                <div class="form-group">
+                  <label for="jitsi-url"><i class="fa-solid fa-video"></i> Enlace de la Sala Jitsi (Aula Virtual) *</label>
+                  <input type="url" id="jitsi-url" class="form-control" required placeholder="https://creamosia.com/aula-virtual/?sesion_id=17067" value="https://creamosia.com/aula-virtual/?sesion_id=17067">
+                </div>
+
+                <div class="form-row margin-top-sm">
+                  <div class="form-group flex-1">
+                    <label for="duration-minutes"><i class="fa-solid fa-stopwatch"></i> Duración en Sala (Minutos)</label>
+                    <input type="number" id="duration-minutes" class="form-control" min="1" max="480" value="30" required>
+                  </div>
+
+                  <div class="form-group flex-1">
+                    <label for="staggered-delay"><i class="fa-solid fa-stairs"></i> Retraso entre Inicios (Escalado)</label>
+                    <select id="staggered-delay" class="form-control">
+                      <option value="true" selected>Sí (15 a 30 segs progresivo)</option>
+                      <option value="false">No (Simultáneo inmediato)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="info-note-box margin-top-sm">
+                  <i class="fa-solid fa-microphone-slash"></i>
+                  <span><strong>Audio y Video silenciados:</strong> Todos los bots se conectan sin cámara ni micrófono (100% Silencio Absoluto).</span>
+                </div>
+
+                <button type="submit" id="btn-launch-bots" class="btn btn-primary btn-block btn-lg margin-top">
+                  <i class="fa-solid fa-play"></i> Iniciar Bots de Asistencia (<span id="btn-launch-count">0</span>)
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Panel 4: Live Bot Monitor -->
+          <div class="dashboard-card">
+            <div class="card-header space-between">
+              <div class="title-with-icon">
+                <i class="fa-solid fa-desktop"></i>
+                <h2>4. Monitor de Conexiones de Bots en Vivo</h2>
+              </div>
+              <button id="btn-stop-all" class="btn btn-danger btn-sm" disabled>
+                <i class="fa-solid fa-stop"></i> Detener Todos los Bots
+              </button>
+            </div>
+
+            <div class="card-body">
+              <div class="table-responsive">
+                <table class="live-bots-table">
+                  <thead>
+                    <tr>
+                      <th>Empleado (Empresa)</th>
+                      <th>Estado</th>
+                      <th>Consumo MB</th>
+                      <th>Tiempo Transcurrido</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="bots-table-body">
+                    <tr class="empty-row">
+                      <td colspan="5">
+                        <div class="empty-state">
+                          <i class="fa-solid fa-robot-circle-check"></i>
+                          <p>No hay bots de asistencia activos en este momento.</p>
+                          <span>Selecciona empleados y presiona "Iniciar Bots de Asistencia" para comenzar.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 2: GESTIÓN DE TRABAJADORES -->
+    <div id="tab-employees" class="tab-content hidden">
+      <div class="tab-header-banner">
+        <div>
+          <h2><i class="fa-solid fa-users-gear"></i> Gestión y Edición de Trabajadores</h2>
+          <p>Consulta, edita datos de trabajadores y asigna direcciones IP regionales.</p>
+        </div>
+        <div class="action-buttons-group">
+          <button id="btn-sync-wordpress" class="btn btn-secondary" style="background: rgba(52, 199, 89, 0.2); border: 1px solid rgba(52, 199, 89, 0.4); color: #34c759;">
+            <i class="fa-solid fa-rotate"></i> Sincronizar con WordPress
+          </button>
+          <button id="btn-tab-add-employee" class="btn btn-primary">
+            <i class="fa-solid fa-user-plus"></i> Nuevo Trabajador
+          </button>
+        </div>
+      </div>
+
+      <div class="dashboard-card margin-top">
+        <div class="card-body">
+          <div class="filter-controls-row">
+            <div class="form-group flex-1">
+              <label><i class="fa-solid fa-magnifying-glass"></i> Buscar por Nombre, DNI o Email</label>
+              <input type="text" id="tab-emp-search" class="form-control" placeholder="Escribe para filtrar...">
+            </div>
+            <div class="form-group flex-1">
+              <label><i class="fa-solid fa-building"></i> Filtrar por Empresa</label>
+              <select id="tab-emp-filter-company" class="form-control">
+                <option value="">-- Todas las Empresas --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-responsive margin-top">
+            <table class="employees-management-table">
+              <thead>
+                <tr>
+                  <th>Trabajador</th>
+                  <th>Empresa</th>
+                  <th>DNI / NIF</th>
+                  <th>Email</th>
+                  <th>Usuario / Pass WP</th>
+                  <th>IP Asignada</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tab-emp-table-body">
+                <tr class="empty-row">
+                  <td colspan="7">
+                    <div class="empty-state">
+                      <i class="fa-solid fa-users-slash"></i>
+                      <p>No se encontraron trabajadores cargados.</p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Paginación -->
+          <div class="pagination-wrapper margin-top-sm" id="tab-emp-pagination-container">
+            <div class="pagination-info" id="tab-emp-pagination-info">
+              Mostrando <strong>0</strong> - <strong>0</strong> de <strong>0</strong> trabajadores
+            </div>
+            <div class="pagination-controls">
+              <label class="pagination-size">
+                <span>Filas:</span>
+                <select id="tab-emp-page-size" class="form-control-sm">
+                  <option value="5">5</option>
+                  <option value="10" selected>10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                </select>
+              </label>
+              <div class="pagination-buttons" id="tab-emp-pagination-buttons">
+                <!-- Botones generados dinámicamente -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: PROGRAMACIÓN DE REUNIONES -->
+    <div id="tab-meetings" class="tab-content hidden">
+      <div class="tab-header-banner">
+        <div>
+          <h2><i class="fa-solid fa-calendar-check"></i> Programación de Reuniones</h2>
+          <p>Crea sesiones de Jitsi, agenda fecha/hora y asigna a los trabajadores asistentes.</p>
+        </div>
+        <button id="btn-tab-add-meeting" class="btn btn-primary">
+          <i class="fa-solid fa-calendar-plus"></i> Programar Nueva Reunión
+        </button>
+      </div>
+
+      <div id="meetings-cards-grid" class="meetings-cards-grid margin-top">
+        <div class="empty-state">
+          <i class="fa-solid fa-calendar-xmark"></i>
+          <p>No hay reuniones programadas aún.</p>
+          <span>Haz clic en "Programar Nueva Reunión" para crear la primera.</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- IP Assigner Modal Dialog (Spain Cities & Proxies) -->
+  <div id="ip-modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <div class="modal-icon">
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div>
+            <h3 id="modal-employee-name">Asignar IP</h3>
+            <p id="modal-employee-subtitle" class="modal-subtitle">Asignación de IP regional para bot de asistencia</p>
+          </div>
+        </div>
+        <button id="modal-close-btn" class="modal-close-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Target Course City Indicator -->
+        <div id="modal-course-city-banner" class="modal-banner">
+          <i class="fa-solid fa-location-dot"></i>
+          <div>
+            <strong>Ciudad Sugerida por Curso:</strong> <span id="modal-suggested-city">Madrid (Comunidad de Madrid)</span>
+            <small>Basado en el curso del empleado en España</small>
+          </div>
+        </div>
+
+        <!-- City Selector Dropdown (Select2 Style with Search) -->
+        <div class="modal-city-tabs-wrapper">
+          <label><i class="fa-solid fa-location-dot"></i> Seleccionar Ciudad:</label>
+          <div class="custom-select2-container" id="custom-city-select2">
+            <div class="select2-trigger" id="select2-city-trigger">
+              <span id="select2-current-label">🇪🇸 -- Todas las Ciudades --</span>
+              <i class="fa-solid fa-chevron-down select2-arrow"></i>
+            </div>
+            <div class="select2-dropdown hidden" id="select2-city-dropdown">
+              <div class="select2-search-box">
+                <i class="fa-solid fa-magnifying-glass select2-search-icon"></i>
+                <input type="text" id="modal-city-search" placeholder="Escribe para buscar ciudad (ej. Madrid, Sevilla, Vigo, Bilbao)...">
+              </div>
+              <div class="select2-options-list" id="modal-city-options">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IP Cards Options -->
+        <div class="ip-list-wrapper">
+          <label><i class="fa-solid fa-server"></i> Seleccionar IP Disponible:</label>
+          <div id="ip-cards-container" class="ip-cards-grid">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modal-btn-generate-ip" class="btn btn-outline" style="border-color: var(--apple-green); color: var(--apple-green);">
+          <i class="fa-solid fa-plus-circle"></i> Generar IP de Ciudad
+        </button>
+        <button id="modal-btn-auto-assign" class="btn btn-outline">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-asignar IP Sugerida
+        </button>
+        <button id="modal-btn-unassign" class="btn btn-danger btn-sm">
+          <i class="fa-solid fa-trash-can"></i> Quitar IP
+        </button>
+        <button id="modal-btn-cancel" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Employee Add / Edit Modal -->
+  <div id="emp-modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <div class="modal-icon"><i class="fa-solid fa-user-pen"></i></div>
+          <div>
+            <h3 id="emp-modal-title">Agregar Trabajador</h3>
+            <p class="modal-subtitle">Ingresa la información del trabajador</p>
+          </div>
+        </div>
+        <button id="emp-modal-close" class="modal-close-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="emp-form">
+          <input type="hidden" id="emp-edit-id">
+          <div class="form-group">
+            <label>Nombre Completo *</label>
+            <input type="text" id="emp-form-name" class="form-control" required placeholder="Ej. Carlos Mendoza">
+          </div>
+          <div class="form-group">
+            <label>Empresa *</label>
+            <select id="emp-form-company" class="form-control" required>
+              <!-- Rendered dynamically -->
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>DNI / NIF</label>
+              <input type="text" id="emp-form-dni" class="form-control" placeholder="45892011X">
+            </div>
+            <div class="form-group flex-1">
+              <label>Email</label>
+              <input type="email" id="emp-form-email" class="form-control" placeholder="carlos@empresa.es">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label>Usuario Login WP</label>
+              <input type="text" id="emp-form-login" class="form-control" placeholder="alumno_orq_01">
+            </div>
+            <div class="form-group flex-1">
+              <label>Contraseña WP</label>
+              <input type="text" id="emp-form-pass" class="form-control" placeholder="Contraseña">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button id="emp-modal-save-btn" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar Trabajador</button>
+        <button id="emp-modal-cancel-btn" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Meeting Program / Edit Modal -->
+  <div id="meeting-modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card modal-large">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <div class="modal-icon"><i class="fa-solid fa-calendar-days"></i></div>
+          <div>
+            <h3 id="meeting-modal-title">Programar Nueva Reunión</h3>
+            <p class="modal-subtitle">Configura los detalles de la sesión y asigna los asistentes</p>
+          </div>
+        </div>
+        <button id="meeting-modal-close" class="modal-close-icon"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="modal-body">
+        <form id="meeting-form">
+          <input type="hidden" id="meeting-edit-id">
+          <div class="form-group">
+            <label>Título de la Reunión *</label>
+            <input type="text" id="meeting-form-title" class="form-control" required placeholder="Ej. Sesión de Capacitación PRL - Grupo A">
+          </div>
+          <div class="form-group">
+            <label>URL del Aula Virtual / Jitsi *</label>
+            <input type="url" id="meeting-form-url" class="form-control" required placeholder="https://creamosia.com/aula-virtual/?sesion_id=17067" value="https://creamosia.com/aula-virtual/?sesion_id=17067">
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-1 custom-datepicker-container" id="custom-datetime-picker">
+              <label>Fecha y Hora Programada *</label>
+              <div class="custom-datepicker-trigger" id="datepicker-trigger">
+                <i class="fa-regular fa-calendar-days datepicker-icon"></i>
+                <span class="datepicker-display" id="datepicker-display-value">Seleccionar fecha y hora...</span>
+                <i class="fa-solid fa-chevron-down datepicker-arrow"></i>
+              </div>
+              <input type="hidden" id="meeting-form-time" required>
+
+              <div class="custom-datepicker-popover hidden" id="datepicker-popover">
+                <div class="datepicker-header">
+                  <button type="button" class="datepicker-nav-btn" id="dp-prev-month" title="Mes anterior"><i class="fa-solid fa-chevron-left"></i></button>
+                  <span class="datepicker-month-year-label" id="dp-month-year-label">Septiembre 2026</span>
+                  <button type="button" class="datepicker-nav-btn" id="dp-next-month" title="Mes siguiente"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+
+                <div class="datepicker-weekdays">
+                  <span>Lu</span><span>Ma</span><span>Mi</span><span>Ju</span><span>Vi</span><span>Sá</span><span>Do</span>
+                </div>
+                <div class="datepicker-days-grid" id="dp-days-grid"></div>
+
+                <div class="datepicker-time-section">
+                  <div class="datepicker-time-title"><i class="fa-regular fa-clock"></i> Hora de inicio:</div>
+                  <div class="datepicker-time-inputs">
+                    <select id="dp-hour-select" class="datepicker-time-select"></select>
+                    <span class="datepicker-time-colon">:</span>
+                    <select id="dp-minute-select" class="datepicker-time-select"></select>
+                  </div>
+                </div>
+
+                <div class="datepicker-footer">
+                  <button type="button" class="btn btn-ghost btn-sm" id="dp-btn-today">Hoy / Ahora</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="dp-btn-apply">Confirmar</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group flex-1">
+              <label>Duración (Minutos) *</label>
+              <input type="number" id="meeting-form-duration" class="form-control" value="30" min="5" max="240" required>
+            </div>
+          </div>
+          
+          <div class="form-group margin-top-sm">
+            <div class="label-with-action">
+              <label><i class="fa-solid fa-users"></i> Asignar Trabajadores a la Reunión</label>
+              <div class="select-all-inline">
+                <button type="button" id="meeting-select-all-emps" class="btn-link">Seleccionar Todos</button> | 
+                <button type="button" id="meeting-deselect-all-emps" class="btn-link">Desmarcar Todos</button>
+              </div>
+            </div>
+            <div id="meeting-employees-selector" class="employees-checkbox-grid">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <div class="form-row margin-top-sm">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="meeting-form-auto-mute" checked>
+              <span class="checkmark"></span>
+              <span>Silenciar audio y video automáticamente (100% Sin Pitido)</span>
+            </label>
+          </div>
+          <div class="form-row margin-top-xs">
+            <label class="custom-checkbox">
+              <input type="checkbox" id="meeting-form-staggered" checked>
+              <span class="checkmark"></span>
+              <span>Escalado progresivo de bots (retraso 15-30s entre inicios)</span>
+            </label>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button id="meeting-modal-save-btn" class="btn btn-primary"><i class="fa-solid fa-calendar-check"></i> Guardar Reunión</button>
+        <button id="meeting-modal-cancel-btn" class="btn btn-ghost">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+
+</html>

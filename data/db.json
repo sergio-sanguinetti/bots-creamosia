@@ -1,0 +1,324 @@
+{
+  "companies": [
+    {
+      "id": "comp_ia_technology_solutions_sl",
+      "name": "IA TECHNOLOGY SOLUTIONS SL"
+    },
+    {
+      "id": "comp_orquestacion_bots",
+      "name": "ORQUESTACION BOTS"
+    }
+  ],
+  "courses": [
+    {
+      "id": "course_1",
+      "title": "Prevención de Riesgos Laborales (PRL)",
+      "city": "Madrid",
+      "region": "Comunidad de Madrid"
+    },
+    {
+      "id": "course_2",
+      "title": "Protección de Datos (RGPD) y Ciberseguridad",
+      "city": "Barcelona",
+      "region": "Cataluña"
+    },
+    {
+      "id": "course_3",
+      "title": "Igualdad y Protocolo de Acoso Laboral",
+      "city": "Valencia",
+      "region": "Comunitat Valenciana"
+    },
+    {
+      "id": "course_4",
+      "title": "Primeros Auxilios y Plan de Emergencia",
+      "city": "Sevilla",
+      "region": "Andalucía"
+    },
+    {
+      "id": "course_5",
+      "title": "Transformación Digital y Herramientas Cloud",
+      "city": "Bilbao",
+      "region": "País Vasco"
+    },
+    {
+      "id": "course_17066",
+      "title": "prueba orquetacion",
+      "city": "Madrid",
+      "region": "Comunidad de Madrid"
+    }
+  ],
+  "employees": [
+    {
+      "id": "wp_user_21",
+      "name": "Asier Bañuelos",
+      "login": "asierbanuelosdelafuente",
+      "pass": "123456",
+      "dni": "45918401M",
+      "email": "asierbanuelosdelafuente@gmail.com",
+      "companyId": "comp_ia_technology_solutions_sl",
+      "companyName": "IA TECHNOLOGY SOLUTIONS SL",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid"
+    },
+    {
+      "id": "wp_user_48",
+      "name": "Alumno Orquestacion 01",
+      "login": "alumno_orq_01",
+      "pass": "AlumnoOrq2026!01",
+      "dni": "12345601A",
+      "email": "alumno01.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "150.244.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_49",
+      "name": "Alumno Orquestacion 02",
+      "login": "alumno_orq_02",
+      "pass": "AlumnoOrq2026!02",
+      "dni": "12345602A",
+      "email": "alumno02.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "163.117.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_50",
+      "name": "Alumno Orquestacion 03",
+      "login": "alumno_orq_03",
+      "pass": "AlumnoOrq2026!03",
+      "dni": "12345603A",
+      "email": "alumno03.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.3",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_51",
+      "name": "Alumno Orquestacion 04",
+      "login": "alumno_orq_04",
+      "pass": "AlumnoOrq2026!04",
+      "dni": "12345604A",
+      "email": "alumno04.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_52",
+      "name": "Alumno Orquestacion 05",
+      "login": "alumno_orq_05",
+      "pass": "AlumnoOrq2026!05",
+      "dni": "12345605A",
+      "email": "alumno05.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "150.244.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_53",
+      "name": "Alumno Orquestacion 06",
+      "login": "alumno_orq_06",
+      "pass": "AlumnoOrq2026!06",
+      "dni": "12345606A",
+      "email": "alumno06.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.6",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_54",
+      "name": "Alumno Orquestacion 07",
+      "login": "alumno_orq_07",
+      "pass": "AlumnoOrq2026!07",
+      "dni": "12345607A",
+      "email": "alumno07.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "147.96.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_55",
+      "name": "Alumno Orquestacion 08",
+      "login": "alumno_orq_08",
+      "pass": "AlumnoOrq2026!08",
+      "dni": "12345608A",
+      "email": "alumno08.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_56",
+      "name": "Alumno Orquestacion 09",
+      "login": "alumno_orq_09",
+      "pass": "AlumnoOrq2026!09",
+      "dni": "12345609A",
+      "email": "alumno09.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.9",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_57",
+      "name": "Alumno Orquestacion 10",
+      "login": "alumno_orq_10",
+      "pass": "AlumnoOrq2026!10",
+      "dni": "12345610A",
+      "email": "alumno10.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "163.117.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_58",
+      "name": "Alumno Orquestacion 11",
+      "login": "alumno_orq_11",
+      "pass": "AlumnoOrq2026!11",
+      "dni": "12345611A",
+      "email": "alumno11.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "147.96.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_59",
+      "name": "Alumno Orquestacion 12",
+      "login": "alumno_orq_12",
+      "pass": "AlumnoOrq2026!12",
+      "dni": "12345612A",
+      "email": "alumno12.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.12",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_60",
+      "name": "Alumno Orquestacion 13",
+      "login": "alumno_orq_13",
+      "pass": "AlumnoOrq2026!13",
+      "dni": "12345613A",
+      "email": "alumno13.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "150.244.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_61",
+      "name": "Alumno Orquestacion 14",
+      "login": "alumno_orq_14",
+      "pass": "AlumnoOrq2026!14",
+      "dni": "12345614A",
+      "email": "alumno14.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "163.117.1.1",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    },
+    {
+      "id": "wp_user_62",
+      "name": "Alumno Orquestacion 15",
+      "login": "alumno_orq_15",
+      "pass": "AlumnoOrq2026!15",
+      "dni": "12345615A",
+      "email": "alumno15.orquestacion@creamosia.com",
+      "companyId": "comp_orquestacion_bots",
+      "companyName": "ORQUESTACION BOTS",
+      "courses": [
+        "course_17066"
+      ],
+      "ipAddress": "138.100.1.15",
+      "ipCity": "Madrid",
+      "ipRegion": "Comunidad de Madrid",
+      "ipIsp": "Telefónica de España"
+    }
+  ],
+  "scheduledMeetings": []
+}
