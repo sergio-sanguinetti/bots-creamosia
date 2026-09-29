@@ -11,8 +11,14 @@ class SchedulerService {
     if (this.interval) return;
     console.log('[SchedulerService] 🕒 Background CronJob Scheduler iniciado. Verificando reuniones cada 10s...');
     
-    // Immediate check on startup
-    this.checkScheduledMeetings();
+    // Limpiar reuniones que quedaron en 'in_progress' si el servidor se reinició
+    const meetings = dataStore.getMeetings();
+    for (const m of meetings) {
+      if (m.status === 'in_progress') {
+        console.log(`[SchedulerService] Limpiando reunión previa interrumpida: "${m.title}"`);
+        dataStore.updateMeeting(m.id, { status: 'completed', endedAt: new Date().toISOString() });
+      }
+    }
 
     this.interval = setInterval(() => {
       this.checkScheduledMeetings();

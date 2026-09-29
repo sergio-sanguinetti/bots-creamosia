@@ -193,13 +193,25 @@ class BotManager {
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
+        '--renderer-process-limit=1',
+        '--disable-extensions',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-breakpad',
+        '--disable-component-update',
+        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
+        '--disable-renderer-backgrounding',
+        '--disable-ipc-flooding-protection',
+        '--js-flags=--max-old-space-size=96',
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         '--mute-audio',
         '--disable-notifications',
         '--disable-permissions-api',
         '--disable-web-security',
-        '--autoplay-policy=no-user-gesture-required'
+        '--autoplay-policy=no-user-gesture-required',
+        '--window-size=800,600'
       ];
 
       // Feed 100% silent WAV audio file into fake microphone instead of default 440Hz test tone / beep
@@ -229,6 +241,27 @@ class BotManager {
 
       const page = await browser.newPage();
 
+      // Interceptar peticiones innecesarias (imágenes, fuentes, rastreadores) para reducir consumo de RAM en más del 70%
+      await page.setRequestInterception(true);
+      page.on('request', (req) => {
+        const resourceType = req.resourceType();
+        const url = req.url().toLowerCase();
+        if (
+          resourceType === 'image' ||
+          (resourceType === 'media' && !url.includes('silence.wav')) ||
+          resourceType === 'font' ||
+          url.includes('google-analytics') ||
+          url.includes('googletagmanager') ||
+          url.includes('facebook') ||
+          url.includes('hotjar') ||
+          url.includes('clarity.ms')
+        ) {
+          req.abort().catch(() => {});
+        } else {
+          req.continue().catch(() => {});
+        }
+      });
+
       page.on('error', (err) => {
         console.error(`[Bot ${botId}] Page runtime error:`, err.message);
       });
@@ -239,8 +272,8 @@ class BotManager {
       // Select random realistic User-Agent for this bot
       const selectedUserAgent = USER_AGENTS_POOL[Math.floor(Math.random() * USER_AGENTS_POOL.length)];
 
-      // Set realistic browser viewport & unique user agent
-      await page.setViewport({ width: 1280, height: 720 });
+      // Set optimized browser viewport & unique user agent
+      await page.setViewport({ width: 800, height: 600 });
       await page.setUserAgent(selectedUserAgent);
 
       // Guarantee 100% silent audio & blank video at Browser API level
