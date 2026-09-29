@@ -158,7 +158,6 @@ class BotManager {
     }
 
     let browser = null;
-    let mbInterval = null;
     let muteCheckInterval = null;
     let timer = null;
 
@@ -190,49 +189,6 @@ class BotManager {
       browser = await puppeteer.launch(launchOptions);
 
       const page = await browser.newPage();
-
-      // Setup CDP Network listener for real-time MB bandwidth tracing
-      let accumulatedBytes = 0;
-
-      try {
-        const cdpSession = await page.target().createCDPSession();
-        await cdpSession.send('Network.enable');
-
-        cdpSession.on('Network.dataReceived', (event) => {
-          accumulatedBytes += event.dataLength || event.encodedDataLength || 0;
-        });
-
-        cdpSession.on('Network.loadingFinished', (event) => {
-          accumulatedBytes += event.encodedDataLength || 0;
-        });
-
-        cdpSession.on('Network.webSocketFrameReceived', (event) => {
-          if (event.response && event.response.payloadData) {
-            accumulatedBytes += Buffer.byteLength(event.response.payloadData, 'utf8');
-          }
-        });
-      } catch (cdpErr) {
-        console.warn(`[Bot ${botId}] Error al iniciar trazado CDP:`, cdpErr.message);
-      }
-
-      // Interval to report MB consumption every 1.5 seconds reliably to SSE
-      mbInterval = setInterval(async () => {
-        try {
-          if (page && !page.isClosed()) {
-            const pagePerfBytes = await page.evaluate(() => {
-              try {
-                return window.performance.getEntriesByType('resource')
-                  .reduce((sum, r) => sum + (r.transferSize || r.encodedBodySize || 0), 0);
-              } catch (e) { return 0; }
-            });
-
-            const totalBytes = Math.max(accumulatedBytes, pagePerfBytes);
-            dataStore.updateBotBytes(botId, totalBytes);
-          }
-        } catch (e) {
-          // Page might be navigating or closing
-        }
-      }, 1500);
 
       // Select random realistic User-Agent for this bot
       const selectedUserAgent = USER_AGENTS_POOL[Math.floor(Math.random() * USER_AGENTS_POOL.length)];
@@ -492,12 +448,11 @@ class BotManager {
       }, 3000);
 
       // Keep reference to active instance
-      this.activeInstances.set(botId, { browser, page, timer, mbInterval, muteCheckInterval });
+      this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval });
 
     } catch (error) {
       console.error(`[Bot ${botId}] Error en intento ${attemptCount}/${maxAttempts}:`, error.message);
 
-      if (mbInterval) clearInterval(mbInterval);
       if (muteCheckInterval) clearInterval(muteCheckInterval);
       if (browser) {
         try { await browser.close(); } catch (e) {}
@@ -521,9 +476,8 @@ class BotManager {
   async stopBot(botId) {
     const instance = this.activeInstances.get(botId);
     if (instance) {
-      const { browser, timer, mbInterval, muteCheckInterval } = instance;
+      const { browser, timer, muteCheckInterval } = instance;
       if (timer) clearTimeout(timer);
-      if (mbInterval) clearInterval(mbInterval);
       if (muteCheckInterval) clearInterval(muteCheckInterval);
       if (browser) {
         try {

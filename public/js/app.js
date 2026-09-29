@@ -1500,9 +1500,6 @@ document.addEventListener('DOMContentLoaded', () => {
         statusBadge = `<span class="bot-status-badge status-error" ${errTitle}><i class="fa-solid fa-circle-exclamation"></i> Fallo (3/3)</span>`;
       }
 
-      const bytes = bot.bytesConsumed || 0;
-      const mb = (bytes / (1024 * 1024)).toFixed(2);
-
       tr.innerHTML = `
         <td>
           <strong>${bot.employeeName}</strong><br>
@@ -1512,9 +1509,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
         </td>
         <td>${statusBadge}</td>
-        <td>
-          <span class="mb-badge"><i class="fa-solid fa-network-wired"></i> ${mb} MB</span>
-        </td>
         <td><span class="elapsed-timer" data-connected="${bot.connectedAt || ''}">${getElapsedText(bot)}</span></td>
         <td>
           <button class="btn btn-danger btn-sm btn-stop-bot" data-bot-id="${bot.id}">

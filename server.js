@@ -289,23 +289,19 @@ app.post('/api/bots/launch', async (req, res) => {
   }
 });
 
-// 7.1 Get Bot Logs and Network MB consumption
+// 7.1 Get Bot Logs
 app.get('/api/bots/:id/logs', (req, res) => {
   const botId = req.params.id;
   const bot = dataStore.activeBots.get(botId);
   if (!bot) {
     return res.status(404).json({ success: false, error: 'Bot no encontrado o no activo.' });
   }
-  const bytes = bot.bytesConsumed || 0;
-  const mb = (bytes / (1024 * 1024)).toFixed(2);
   res.json({
     success: true,
     botId,
     employeeName: bot.employeeName,
     companyName: bot.companyName,
     status: bot.status,
-    bytesConsumed: bytes,
-    mbConsumed: mb,
     logs: bot.networkLogs || []
   });
 });

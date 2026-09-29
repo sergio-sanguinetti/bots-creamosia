@@ -746,7 +746,6 @@ class DataStore {
 
   // Bot State Management
   addBot(botData) {
-    botData.bytesConsumed = botData.bytesConsumed || 0;
     botData.networkLogs = botData.networkLogs || [
       { timestamp: new Date().toLocaleTimeString('es-ES'), message: 'Bot programado e inicializado', type: 'info' }
     ];
@@ -761,20 +760,6 @@ class DataStore {
       const entry = { timestamp: new Date().toLocaleTimeString('es-ES'), message, type };
       bot.networkLogs.unshift(entry);
       if (bot.networkLogs.length > 50) bot.networkLogs.pop();
-      this.broadcastUpdate('BOT_UPDATED', this.getBotPublicState(bot));
-    }
-  }
-
-  updateBotBytes(botId, bytesConsumed, logMessage = null) {
-    const bot = this.activeBots.get(botId);
-    if (bot) {
-      bot.bytesConsumed = bytesConsumed;
-      if (logMessage) {
-        if (!bot.networkLogs) bot.networkLogs = [];
-        const entry = { timestamp: new Date().toLocaleTimeString('es-ES'), message: logMessage, type: 'network' };
-        bot.networkLogs.unshift(entry);
-        if (bot.networkLogs.length > 50) bot.networkLogs.pop();
-      }
       this.broadcastUpdate('BOT_UPDATED', this.getBotPublicState(bot));
     }
   }
