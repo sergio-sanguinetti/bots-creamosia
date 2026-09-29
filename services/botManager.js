@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const puppeteer = require('puppeteer');
 const { v4: uuidv4 } = require('uuid');
 const dataStore = require('./dataStore');
@@ -166,19 +167,27 @@ class BotManager {
       const displayNameParam = encodeURIComponent(`${employeeName} (${companyName})`);
       const fullJitsiUrl = `${baseUrl}#userInfo.displayName="${displayNameParam}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=true&config.startSilent=true&config.requireDisplayName=false`;
 
+      const silenceWavPath = path.resolve(__dirname, '..', 'silence.wav');
+      const launchArgs = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+        '--mute-audio',
+        '--disable-notifications',
+        '--disable-permissions-api',
+        '--disable-web-security',
+        '--autoplay-policy=no-user-gesture-required'
+      ];
+
+      // Feed 100% silent WAV audio file into fake microphone instead of default 440Hz test tone / beep
+      if (fs.existsSync(silenceWavPath)) {
+        launchArgs.push(`--use-file-for-fake-audio-capture=${silenceWavPath}`);
+      }
+
       const launchOptions = {
         headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--use-fake-ui-for-media-stream',
-          '--use-fake-device-for-media-stream',
-          '--mute-audio',
-          '--disable-notifications',
-          '--disable-permissions-api',
-          '--disable-web-security',
-          '--autoplay-policy=no-user-gesture-required'
-        ]
+        args: launchArgs
       };
 
       const execPath = getChromiumExecutablePath();
@@ -204,8 +213,14 @@ class BotManager {
           navigator.mediaDevices.getUserMedia = async function(constraints) {
             const stream = await origGetUserMedia(constraints);
             try {
-              stream.getAudioTracks().forEach(track => { track.enabled = false; });
-              stream.getVideoTracks().forEach(track => { track.enabled = false; });
+              stream.getAudioTracks().forEach(track => {
+                track.enabled = false;
+                track.stop();
+              });
+              stream.getVideoTracks().forEach(track => {
+                track.enabled = false;
+                track.stop();
+              });
             } catch (e) {}
             return stream;
           };
@@ -225,14 +240,14 @@ class BotManager {
           console.log(`[Bot ${botId}] Step 1: Logging in as ${login}...`);
           dataStore.addBotLog(botId, `Iniciando sesión en WordPress (${login})...`, 'info');
           try {
-            await page.goto('https://creamosia.com/wp-login.php', { waitUntil: 'domcontentloaded', timeout: 30000 });
-            await page.type('#user_login', login);
-            await page.type('#user_pass', pass);
+            await page.goto('https://creamosia.com/wp-login.php', { waitUntil: 'networkidle2', timeout: 35000 });
+            await page.type('#user_login', login, { delay: 15 });
+            await page.type('#user_pass', pass, { delay: 15 });
             await Promise.all([
               page.click('#wp-submit'),
-              page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {})
+              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
             ]);
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 2000));
             dataStore.addBotLog(botId, `Sesión iniciada como ${login}`, 'success');
           } catch (wpLoginErr) {
             console.warn(`[Bot ${botId}] Advertencia al iniciar sesión WP:`, wpLoginErr.message);
@@ -241,7 +256,7 @@ class BotManager {
 
         console.log(`[Bot ${botId}] Step 2: Navigating to Aula Virtual: ${baseUrl}`);
         dataStore.addBotLog(botId, `Conectando al Aula Virtual...`, 'info');
-        await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 35000 });
         await new Promise(r => setTimeout(r, 2000));
 
         // Comprobar si pide DNI por si no estaba logueado
@@ -249,30 +264,39 @@ class BotManager {
         if (dniInput && dni) {
           console.log(`[Bot ${botId}] Ingresando DNI ${dni}...`);
           dataStore.addBotLog(botId, `Identificándose con DNI ${dni}...`, 'info');
-          await dniInput.type(dni);
+          await dniInput.type(dni, { delay: 15 });
           const submitDni = await page.$('button[type="submit"], input[type="submit"], #gc-verificar-dni');
           if (submitDni) {
             await Promise.all([
               submitDni.click(),
-              page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
+              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 25000 }).catch(() => {})
             ]);
-            await new Promise(r => setTimeout(r, 1500));
+            await new Promise(r => setTimeout(r, 2000));
           }
         }
 
-        // Wait up to 15s for #gc-entrar-sala
-        const btnEntrar = await page.waitForSelector('#gc-entrar-sala', { timeout: 15000 }).catch(() => null);
+        // Buscar botón entrar a la sala
+        const btnEntrar = await page.$('#gc-entrar-sala');
         if (btnEntrar) {
           console.log(`[Bot ${botId}] Step 3: Clicked #gc-entrar-sala`);
           await btnEntrar.click();
           dataStore.addBotLog(botId, 'Bot hizo clic en "Entrar a la sala" en el Aula Virtual', 'info');
+          await new Promise(r => setTimeout(r, 2500));
         } else {
-          console.log(`[Bot ${botId}] Step 3: #gc-entrar-sala not found, checking for direct iframe...`);
-          dataStore.addBotLog(botId, 'Buscando contenedor de sala en Aula Virtual...', 'info');
+          const btnEntrarWait = await page.waitForSelector('#gc-entrar-sala', { timeout: 8000 }).catch(() => null);
+          if (btnEntrarWait) {
+            console.log(`[Bot ${botId}] Step 3: Clicked #gc-entrar-sala`);
+            await btnEntrarWait.click();
+            dataStore.addBotLog(botId, 'Bot hizo clic en "Entrar a la sala" en el Aula Virtual', 'info');
+            await new Promise(r => setTimeout(r, 2500));
+          } else {
+            console.log(`[Bot ${botId}] Step 3: #gc-entrar-sala not found, checking for direct iframe...`);
+            dataStore.addBotLog(botId, 'Buscando contenedor de sala en Aula Virtual...', 'info');
+          }
         }
 
-        // Poll for Jitsi iframe and click Join meeting button reliably (up to 45 seconds)
-        const maxWaitMs = 45000;
+        // Poll for Jitsi iframe and click Join meeting button reliably (up to 60 seconds)
+        const maxWaitMs = 60000;
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitMs && !joinedSuccess) {
@@ -301,12 +325,18 @@ class BotManager {
                   input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // Click prejoin mute buttons if present
-                const muteMicBtn = document.querySelector('button[aria-label*="Mute microphone"], button[aria-label*="Silenciar"], div[aria-label*="Mute microphone"]');
-                if (muteMicBtn) muteMicBtn.click();
-
-                const stopCamBtn = document.querySelector('button[aria-label*="Stop camera"], button[aria-label*="Detener cámara"], button[aria-label*="Desactivar cámara"], div[aria-label*="Stop camera"]');
-                if (stopCamBtn) stopCamBtn.click();
+                // Click prejoin mute buttons if present (NEVER click if already unmute)
+                const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                for (const b of buttons) {
+                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                  if (aria.includes('unmute') || aria.includes('activar') || aria.includes('reactivar')) continue;
+                  if (aria.includes('mute microphone') || aria.includes('silenciar')) {
+                    b.click();
+                  }
+                  if (aria.includes('stop camera') || aria.includes('detener cámara')) {
+                    b.click();
+                  }
+                }
 
                 // Find Join button
                 const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
@@ -358,10 +388,11 @@ class BotManager {
             const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
             for (const btn of buttons) {
               const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-              if (aria.includes('mute microphone') || aria.includes('silenciar micrófono') || aria.includes('desactivar micrófono')) {
+              if (aria.includes('unmute') || aria.includes('reactivar') || aria.includes('activar')) continue;
+              if (aria === 'mute microphone' || aria === 'silenciar micrófono' || aria === 'mute audio') {
                 btn.click();
               }
-              if (aria.includes('stop camera') || aria.includes('detener cámara') || aria.includes('desactivar cámara')) {
+              if (aria === 'stop camera' || aria === 'detener cámara' || aria === 'desactivar cámara') {
                 btn.click();
               }
             }
@@ -372,7 +403,7 @@ class BotManager {
         // Navigate to direct Jitsi Meet
         console.log(`[Bot ${botId}] Navegando a: ${fullJitsiUrl}`);
         dataStore.addBotLog(botId, `Conectando a la reunión Jitsi: ${baseUrl}`, 'info');
-        await page.goto(fullJitsiUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.goto(fullJitsiUrl, { waitUntil: 'networkidle2', timeout: 35000 });
 
         await new Promise(r => setTimeout(r, 3000));
 
@@ -430,17 +461,16 @@ class BotManager {
                   } catch (e) {}
                 }
                 const buttons = Array.from(document.querySelectorAll('button, div[role="button"], div.toolbox-button'));
-                const micBtn = buttons.find(b => {
+                for (const b of buttons) {
                   const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                  return aria === 'mute microphone' || aria === 'silenciar micrófono' || aria.includes('desactivar micrófono');
-                });
-                if (micBtn) micBtn.click();
-
-                const camBtn = buttons.find(b => {
-                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                  return aria === 'stop camera' || aria === 'detener cámara' || aria.includes('desactivar cámara');
-                });
-                if (camBtn) camBtn.click();
+                  if (aria.includes('unmute') || aria.includes('reactivar') || aria.includes('activar')) continue;
+                  if (aria === 'mute microphone' || aria === 'silenciar micrófono' || aria === 'mute audio') {
+                    b.click();
+                  }
+                  if (aria === 'stop camera' || aria === 'detener cámara' || aria === 'desactivar cámara') {
+                    b.click();
+                  }
+                }
               }).catch(() => {});
             }
           }
