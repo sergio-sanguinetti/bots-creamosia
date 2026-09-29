@@ -9,6 +9,7 @@ services:
       - PORT=3000
       - NODE_ENV=production
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    shm_size: '2gb'
     volumes:
       - bot_data:/app/data
     restart: always

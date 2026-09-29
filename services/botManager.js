@@ -171,6 +171,13 @@ class BotManager {
       const launchArgs = [
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--no-first-run',
+        '--no-zygote',
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         '--mute-audio',
@@ -197,7 +204,18 @@ class BotManager {
 
       browser = await puppeteer.launch(launchOptions);
 
+      browser.on('disconnected', () => {
+        console.warn(`[Bot ${botId}] Browser disconnected.`);
+      });
+
       const page = await browser.newPage();
+
+      page.on('error', (err) => {
+        console.error(`[Bot ${botId}] Page runtime error:`, err.message);
+      });
+      page.on('close', () => {
+        console.log(`[Bot ${botId}] Page closed.`);
+      });
 
       // Select random realistic User-Agent for this bot
       const selectedUserAgent = USER_AGENTS_POOL[Math.floor(Math.random() * USER_AGENTS_POOL.length)];
@@ -442,7 +460,7 @@ class BotManager {
         }, timeoutMs);
       }
 
-      // Recurring interval to continuously enforce mute state (every 3 seconds)
+      // Recurring interval to continuously enforce mute state purely via Jitsi Conference API (every 10 seconds)
       muteCheckInterval = setInterval(async () => {
         try {
           if (page && !page.isClosed()) {
@@ -460,22 +478,11 @@ class BotManager {
                     }
                   } catch (e) {}
                 }
-                const buttons = Array.from(document.querySelectorAll('button, div[role="button"], div.toolbox-button'));
-                for (const b of buttons) {
-                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                  if (aria.includes('unmute') || aria.includes('reactivar') || aria.includes('activar')) continue;
-                  if (aria === 'mute microphone' || aria === 'silenciar micrófono' || aria === 'mute audio') {
-                    b.click();
-                  }
-                  if (aria === 'stop camera' || aria === 'detener cámara' || aria === 'desactivar cámara') {
-                    b.click();
-                  }
-                }
               }).catch(() => {});
             }
           }
         } catch (e) {}
-      }, 3000);
+      }, 10000);
 
       // Keep reference to active instance
       this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval });
