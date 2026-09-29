@@ -41,6 +41,18 @@ const USER_AGENTS_POOL = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 ];
 
+async function safeGoto(page, url, options = {}, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000, ...options });
+    } catch (err) {
+      if (attempt >= maxRetries) throw err;
+      console.warn(`[SafeGoto] Reintentando navegación a ${url} (intento ${attempt + 1}/${maxRetries}): ${err.message}`);
+      await new Promise(r => setTimeout(r, 2000 * attempt));
+    }
+  }
+}
+
 class BotManager {
   constructor() {
     this.activeInstances = new Map(); // botId -> { browser, page, timer }
@@ -92,13 +104,16 @@ class BotManager {
     }
 
     const launchedBots = [];
+    let accumulatedDelay = 0;
 
     for (let index = 0; index < employees.length; index++) {
       const employee = employees[index];
       const botId = `bot_${uuidv4().substring(0, 8)}`;
       
-      // Staggered delay offset
-      const delayMs = staggeredDelay ? index * (Math.floor(Math.random() * 8000) + 5000) : index * 2000;
+      // Cumulative sequential delay between each bot (7-11s) so they never collide
+      const delayMs = index === 0 ? 0 : accumulatedDelay;
+      const stepDelay = staggeredDelay ? (Math.floor(Math.random() * 4000) + 7000) : 5000;
+      accumulatedDelay += stepDelay;
 
       // Auto-assign IP if employee has no IP assigned yet
       if (!employee.ipAddress || employee.ipAddress === 'Sin IP asignada') {
@@ -166,7 +181,7 @@ class BotManager {
     try {
       // Build display name and URL hash flags for Jitsi Meet auto-join (Always muted audio & video)
       const displayNameParam = encodeURIComponent(`${employeeName} (${companyName})`);
-      const fullJitsiUrl = `${baseUrl}#userInfo.displayName="${displayNameParam}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=true&config.startSilent=true&config.requireDisplayName=false`;
+      const fullJitsiUrl = `${baseUrl}#userInfo.displayName="${displayNameParam}"&config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=true&config.startSilent=true&config.channelLastN=0&config.resolution=72&config.disableSimulcast=true&config.disableRtx=true&config.disableAudioLevels=true&config.p2p.enabled=false&config.requireDisplayName=false`;
 
       const silenceWavPath = path.resolve(__dirname, '..', 'silence.wav');
       const launchArgs = [
@@ -174,9 +189,8 @@ class BotManager {
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-renderer-backgrounding',
+        '--disable-software-rasterizer',
+        '--disable-accelerated-2d-canvas',
         '--no-first-run',
         '--no-zygote',
         '--use-fake-ui-for-media-stream',
@@ -193,8 +207,8 @@ class BotManager {
         launchArgs.push(`--use-file-for-fake-audio-capture=${silenceWavPath}`);
       }
 
-      // Unique isolated browser profile per bot to guarantee 0 session/cookie collisions
-      const botProfileDir = path.join(os.tmpdir(), `bot_profile_${botId}`);
+      // Unique isolated browser profile per bot attempt to guarantee 0 lock/cookie collisions
+      const botProfileDir = path.join(os.tmpdir(), `bot_profile_${botId}_${Date.now()}_${Math.floor(Math.random() * 10000)}`);
 
       const launchOptions = {
         headless: true,
@@ -263,9 +277,9 @@ class BotManager {
           console.log(`[Bot ${botId}] Step 1: Logging in as ${login}...`);
           dataStore.addBotLog(botId, `Iniciando sesión en WordPress (${login})...`, 'info');
           try {
-            await page.goto('https://creamosia.com/wp-login.php', { waitUntil: 'networkidle2', timeout: 35000 });
+            await safeGoto(page, 'https://creamosia.com/wp-login.php', { waitUntil: 'domcontentloaded', timeout: 35000 });
             
-            const userInput = await page.waitForSelector('#user_login', { timeout: 10000 }).catch(() => null);
+            const userInput = await page.waitForSelector('#user_login', { timeout: 15000 }).catch(() => null);
             if (userInput) {
               await page.type('#user_login', login, { delay: 20 });
               await page.type('#user_pass', pass, { delay: 20 });
@@ -275,7 +289,7 @@ class BotManager {
 
               await Promise.all([
                 page.click('#wp-submit'),
-                page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
+                page.waitForNavigation({ waitUntil: 'load', timeout: 30000 }).catch(() => {})
               ]);
             }
 
@@ -297,8 +311,8 @@ class BotManager {
 
         console.log(`[Bot ${botId}] Step 2: Navigating to Aula Virtual: ${baseUrl}`);
         dataStore.addBotLog(botId, `Conectando al Aula Virtual...`, 'info');
-        await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 35000 });
-        await new Promise(r => setTimeout(r, 2000));
+        await safeGoto(page, baseUrl, { waitUntil: 'domcontentloaded', timeout: 35000 });
+        await new Promise(r => setTimeout(r, 2500));
 
         // Comprobar si pide DNI por si no estaba logueado
         const dniInput = await page.$('input[name="gc_dni"], input[name="dni"], #gc_dni, #dni');
@@ -310,7 +324,7 @@ class BotManager {
           if (submitDni) {
             await Promise.all([
               submitDni.click(),
-              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 25000 }).catch(() => {})
+              page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {})
             ]);
             await new Promise(r => setTimeout(r, 2000));
           }
@@ -324,7 +338,7 @@ class BotManager {
           dataStore.addBotLog(botId, 'Bot hizo clic en "Entrar a la sala" en el Aula Virtual', 'info');
           await new Promise(r => setTimeout(r, 2500));
         } else {
-          const btnEntrarWait = await page.waitForSelector('#gc-entrar-sala', { timeout: 8000 }).catch(() => null);
+          const btnEntrarWait = await page.waitForSelector('#gc-entrar-sala', { timeout: 12000 }).catch(() => null);
           if (btnEntrarWait) {
             console.log(`[Bot ${botId}] Step 3: Clicked #gc-entrar-sala`);
             await btnEntrarWait.click();
@@ -336,11 +350,22 @@ class BotManager {
           }
         }
 
-        // Poll for Jitsi iframe and click Join meeting button reliably (up to 60 seconds)
-        const maxWaitMs = 60000;
+        // Poll for Jitsi iframe and click Join meeting button reliably (up to 180 seconds to withstand concurrent load)
+        const maxWaitMs = 180000;
         const startTime = Date.now();
+        let loopCount = 0;
 
         while (Date.now() - startTime < maxWaitMs && !joinedSuccess) {
+          loopCount++;
+          
+          // If after several loops no iframe, try re-clicking #gc-entrar-sala if present
+          if (loopCount % 6 === 0) {
+            const retryBtn = await page.$('#gc-entrar-sala').catch(() => null);
+            if (retryBtn) {
+              await retryBtn.click().catch(() => {});
+            }
+          }
+
           const frames = page.frames();
           const jitsiFrame = frames.find(f => f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'));
 
@@ -401,8 +426,16 @@ class BotManager {
                 await page.keyboard.press('Enter').catch(() => {});
                 dataStore.addBotLog(botId, `Bot hizo clic en botón prejoin "${clickResult}" dentro del iframe Jitsi`, 'info');
                 await new Promise(r => setTimeout(r, 4000));
-                joinedSuccess = true;
-                break;
+                
+                // Confirm joined state
+                const confirmed = await jitsiFrame.evaluate(() => {
+                  return !!(window.APP && window.APP.conference && window.APP.conference.isJoined() === true);
+                }).catch(() => false);
+
+                if (confirmed) {
+                  joinedSuccess = true;
+                  break;
+                }
               }
             } catch (err) {
               // Frame still loading
@@ -411,7 +444,7 @@ class BotManager {
           await new Promise(r => setTimeout(r, 1500));
         }
 
-        // Post-join mute enforcement
+        // Post-join mute & low-bandwidth enforcement purely via Jitsi API
         const endFrames = page.frames();
         const finalJitsiFrame = endFrames.find(f => f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'));
         if (finalJitsiFrame) {
@@ -424,27 +457,22 @@ class BotManager {
                 if (!window.APP.conference.isLocalVideoMuted()) {
                   window.APP.conference.muteVideo(true);
                 }
+                if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') {
+                  window.APP.conference.setReceiverVideoConstraint(0);
+                }
+                if (typeof window.APP.conference.setLastN === 'function') {
+                  window.APP.conference.setLastN(0);
+                }
               } catch (e) {}
             }
-            const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
-            for (const btn of buttons) {
-              const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-              if (aria.includes('unmute') || aria.includes('reactivar') || aria.includes('activar')) continue;
-              if (aria === 'mute microphone' || aria === 'silenciar micrófono' || aria === 'mute audio') {
-                btn.click();
-              }
-              if (aria === 'stop camera' || aria === 'detener cámara' || aria === 'desactivar cámara') {
-                btn.click();
-              }
-            }
           }).catch(() => {});
-          dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente', 'info');
+          dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente (modo ahorro de ancho de banda LastN=0)', 'info');
         }
       } else {
         // Navigate to direct Jitsi Meet
         console.log(`[Bot ${botId}] Navegando a: ${fullJitsiUrl}`);
         dataStore.addBotLog(botId, `Conectando a la reunión Jitsi: ${baseUrl}`, 'info');
-        await page.goto(fullJitsiUrl, { waitUntil: 'networkidle2', timeout: 35000 });
+        await page.goto(fullJitsiUrl, { waitUntil: 'networkidle2', timeout: 45000 });
 
         await new Promise(r => setTimeout(r, 3000));
 
@@ -510,6 +538,12 @@ class BotManager {
                     }
                     if (!window.APP.conference.isLocalVideoMuted()) {
                       window.APP.conference.muteVideo(true);
+                    }
+                    if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') {
+                      window.APP.conference.setReceiverVideoConstraint(0);
+                    }
+                    if (typeof window.APP.conference.setLastN === 'function') {
+                      window.APP.conference.setLastN(0);
                     }
                   } catch (e) {}
                 }

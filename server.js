@@ -14,6 +14,7 @@ const path = require('path');
 const dataStore = require('./services/dataStore');
 const excelService = require('./services/excelService');
 const botManager = require('./services/botManager');
+const schedulerService = require('./services/schedulerService');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -353,6 +354,7 @@ function startServer(initialPort) {
     console.log(`🚀 ORQUESTADOR DE BOTS ejecutándose en:`);
     console.log(`   http://localhost:${port}`);
     console.log(`====================================================`);
+    schedulerService.start();
   });
 
   server.on('error', (err) => {
