@@ -1975,3 +1975,77 @@ h1, h2, h3, h4 {
   padding-top: 0.4rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* Meeting Modal Employees Selector Grid */
+.employees-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.45rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--apple-card-border);
+  border-radius: var(--radius-md);
+}
+
+.emp-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  font-size: 0.85rem;
+}
+
+.emp-checkbox-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.emp-checkbox-item.checked {
+  background: rgba(10, 132, 255, 0.12);
+  border-color: rgba(10, 132, 255, 0.4);
+}
+
+.emp-checkbox-item input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--apple-blue);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.emp-checkbox-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.emp-checkbox-name {
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emp-checkbox-company {
+  font-size: 0.75rem;
+  color: var(--apple-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emp-checkbox-dni {
+  font-size: 0.72rem;
+  color: var(--apple-cyan);
+  font-family: var(--font-mono);
+}

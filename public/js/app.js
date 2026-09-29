@@ -136,6 +136,9 @@ document.addEventListener('DOMContentLoaded', () => {
     meetingFormUrl: document.getElementById('meeting-form-url'),
     meetingFormTime: document.getElementById('meeting-form-time'),
     meetingFormDuration: document.getElementById('meeting-form-duration'),
+    meetingFilterCompany: document.getElementById('meeting-filter-company'),
+    meetingFilterCourse: document.getElementById('meeting-filter-course'),
+    meetingSearchEmployee: document.getElementById('meeting-search-employee'),
     meetingEmployeesSelector: document.getElementById('meeting-employees-selector'),
     meetingSelectAllEmps: document.getElementById('meeting-select-all-emps'),
     meetingDeselectAllEmps: document.getElementById('meeting-deselect-all-emps'),
@@ -580,16 +583,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.meetingModalCancelBtn) el.meetingModalCancelBtn.addEventListener('click', closeMeetingModal);
     if (el.meetingModalSaveBtn) el.meetingModalSaveBtn.addEventListener('click', saveMeeting);
 
+    if (el.meetingFilterCompany) {
+      el.meetingFilterCompany.addEventListener('change', (e) => {
+        meetingModalFilters.companyId = e.target.value;
+        renderMeetingEmployeesSelector();
+      });
+    }
+
+    if (el.meetingFilterCourse) {
+      el.meetingFilterCourse.addEventListener('change', (e) => {
+        meetingModalFilters.courseId = e.target.value;
+        renderMeetingEmployeesSelector();
+      });
+    }
+
+    let meetingSearchTimeout = null;
+    if (el.meetingSearchEmployee) {
+      el.meetingSearchEmployee.addEventListener('input', (e) => {
+        clearTimeout(meetingSearchTimeout);
+        meetingSearchTimeout = setTimeout(() => {
+          meetingModalFilters.search = e.target.value.trim();
+          renderMeetingEmployeesSelector();
+        }, 150);
+      });
+    }
+
     if (el.meetingSelectAllEmps) {
       el.meetingSelectAllEmps.addEventListener('click', () => {
         const checkboxes = el.meetingEmployeesSelector.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(c => c.checked = true);
+        checkboxes.forEach(c => {
+          c.checked = true;
+          meetingModalSelectedEmpIds.add(c.value);
+          c.closest('.emp-checkbox-item')?.classList.add('checked');
+        });
       });
     }
     if (el.meetingDeselectAllEmps) {
       el.meetingDeselectAllEmps.addEventListener('click', () => {
         const checkboxes = el.meetingEmployeesSelector.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(c => c.checked = false);
+        checkboxes.forEach(c => {
+          c.checked = false;
+          meetingModalSelectedEmpIds.delete(c.value);
+          c.closest('.emp-checkbox-item')?.classList.remove('checked');
+        });
       });
     }
   }
@@ -1123,18 +1159,111 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function openMeetingModal(meeting = null) {
+  // State for Meeting Modal Filters & Selections
+  const meetingModalSelectedEmpIds = new Set();
+  const meetingModalFilters = {
+    companyId: '',
+    courseId: '',
+    search: ''
+  };
+
+  function populateMeetingFilterDropdowns() {
+    if (el.meetingFilterCompany) {
+      el.meetingFilterCompany.innerHTML = '<option value="">-- Todas las Empresas --</option>';
+      state.companies.forEach(comp => {
+        const opt = document.createElement('option');
+        opt.value = comp.id;
+        opt.textContent = comp.name;
+        el.meetingFilterCompany.appendChild(opt);
+      });
+      el.meetingFilterCompany.value = meetingModalFilters.companyId || '';
+    }
+
+    if (el.meetingFilterCourse) {
+      el.meetingFilterCourse.innerHTML = '<option value="">-- Todos los Cursos --</option>';
+      state.courses.forEach(crs => {
+        const opt = document.createElement('option');
+        opt.value = crs.id;
+        opt.textContent = `${crs.name} (${crs.city})`;
+        el.meetingFilterCourse.appendChild(opt);
+      });
+      el.meetingFilterCourse.value = meetingModalFilters.courseId || '';
+    }
+
+    if (el.meetingSearchEmployee) {
+      el.meetingSearchEmployee.value = meetingModalFilters.search || '';
+    }
+  }
+
+  function renderMeetingEmployeesSelector() {
+    if (!el.meetingEmployeesSelector) return;
     el.meetingEmployeesSelector.innerHTML = '';
-    state.employees.forEach(emp => {
+
+    const searchTerm = (meetingModalFilters.search || '').toLowerCase();
+    const companyFilter = meetingModalFilters.companyId;
+    const courseFilter = meetingModalFilters.courseId;
+
+    const filtered = state.employees.filter(emp => {
+      const matchComp = !companyFilter || emp.companyId === companyFilter;
+      const matchCourse = !courseFilter || (emp.courses && emp.courses.includes(courseFilter));
+      const matchSearch = !searchTerm ||
+        emp.name.toLowerCase().includes(searchTerm) ||
+        (emp.dni && emp.dni.toLowerCase().includes(searchTerm)) ||
+        (emp.email && emp.email.toLowerCase().includes(searchTerm));
+      return matchComp && matchCourse && matchSearch;
+    });
+
+    if (filtered.length === 0) {
+      el.meetingEmployeesSelector.innerHTML = `
+        <div class="empty-state" style="grid-column: 1 / -1; padding: 1.25rem;">
+          <i class="fa-solid fa-users-slash"></i>
+          <p style="font-size: 0.85rem;">No se encontraron trabajadores con los filtros seleccionados.</p>
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach(emp => {
+      const isChecked = meetingModalSelectedEmpIds.has(emp.id);
       const label = document.createElement('label');
-      label.className = 'emp-checkbox-item';
-      const isChecked = meeting && meeting.assignedEmployeeIds ? meeting.assignedEmployeeIds.includes(emp.id) : false;
+      label.className = `emp-checkbox-item ${isChecked ? 'checked' : ''}`;
+      
+      const dniText = emp.dni ? `• ${emp.dni}` : '';
       label.innerHTML = `
         <input type="checkbox" value="${emp.id}" ${isChecked ? 'checked' : ''}>
-        <span>${emp.name} <small style="color: var(--apple-text-secondary);">(${emp.companyName || 'General'})</small></span>
+        <div class="emp-checkbox-text">
+          <span class="emp-checkbox-name">${emp.name}</span>
+          <span class="emp-checkbox-company">${emp.companyName || 'General'} <span class="emp-checkbox-dni">${dniText}</span></span>
+        </div>
       `;
+
+      const checkbox = label.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', (e) => {
+        if (e.target.checked) {
+          meetingModalSelectedEmpIds.add(emp.id);
+          label.classList.add('checked');
+        } else {
+          meetingModalSelectedEmpIds.delete(emp.id);
+          label.classList.remove('checked');
+        }
+      });
+
       el.meetingEmployeesSelector.appendChild(label);
     });
+  }
+
+  function openMeetingModal(meeting = null) {
+    meetingModalSelectedEmpIds.clear();
+    meetingModalFilters.companyId = '';
+    meetingModalFilters.courseId = '';
+    meetingModalFilters.search = '';
+
+    if (meeting && Array.isArray(meeting.assignedEmployeeIds)) {
+      meeting.assignedEmployeeIds.forEach(id => meetingModalSelectedEmpIds.add(id));
+    }
+
+    populateMeetingFilterDropdowns();
+    renderMeetingEmployeesSelector();
 
     if (meeting) {
       el.meetingModalTitle.textContent = 'Editar Reunión Programada';
@@ -1174,8 +1303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scheduledTime = el.meetingFormTime.value;
     const durationMinutes = parseInt(el.meetingFormDuration.value, 10);
 
-    const checkedInputs = el.meetingEmployeesSelector.querySelectorAll('input[type="checkbox"]:checked');
-    const assignedEmployeeIds = Array.from(checkedInputs).map(cb => cb.value);
+    const assignedEmployeeIds = Array.from(meetingModalSelectedEmpIds);
 
     if (!title || !jitsiUrl) {
       alert('Título y URL de Jitsi son campos obligatorios.');
@@ -1485,14 +1613,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const tr = document.createElement('tr');
 
       let statusBadge = '';
+      const batchTag = (bot.batchNumber && bot.totalBatches) ? ` (Bloque ${bot.batchNumber}/${bot.totalBatches})` : '';
       if (bot.status === 'scheduled') {
-        statusBadge = `<span class="bot-status-badge status-scheduled"><i class="fa-regular fa-clock"></i> Programado</span>`;
+        statusBadge = `<span class="bot-status-badge status-scheduled"><i class="fa-regular fa-clock"></i> En Cola${batchTag}</span>`;
       } else if (bot.status === 'connecting') {
         const attStr = bot.attempt ? ` (${bot.attempt}/3)` : '';
-        statusBadge = `<span class="bot-status-badge status-connecting"><i class="fa-solid fa-spinner fa-spin"></i> Conectando${attStr}...</span>`;
+        statusBadge = `<span class="bot-status-badge status-connecting"><i class="fa-solid fa-spinner fa-spin"></i> Conectando${batchTag}${attStr}...</span>`;
       } else if (bot.status === 'retrying') {
         const nextAtt = bot.nextAttempt || (bot.attempt ? bot.attempt + 1 : 2);
-        statusBadge = `<span class="bot-status-badge status-connecting" style="border-color: var(--apple-orange); color: var(--apple-orange);"><i class="fa-solid fa-arrows-rotate fa-spin"></i> Reintentando (${nextAtt}/3)...</span>`;
+        statusBadge = `<span class="bot-status-badge status-connecting" style="border-color: var(--apple-orange); color: var(--apple-orange);"><i class="fa-solid fa-arrows-rotate fa-spin"></i> Reintentando${batchTag} (${nextAtt}/3)...</span>`;
       } else if (bot.status === 'connected') {
         statusBadge = `<span class="bot-status-badge status-connected"><i class="fa-solid fa-signal"></i> En Reunión</span>`;
       } else if (bot.status === 'error') {
@@ -1535,7 +1664,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function getElapsedText(bot) {
-    if (bot.status === 'scheduled') return 'Esperando turno...';
+    if (bot.status === 'scheduled') {
+      const bInfo = (bot.batchNumber && bot.totalBatches) ? ` (Bloque ${bot.batchNumber})` : '';
+      return `Esperando turno${bInfo}...`;
+    }
     if (bot.status === 'connecting') return `Iniciando (Intento ${bot.attempt || 1}/3)...`;
     if (bot.status === 'retrying') return `Reintentando (${bot.nextAttempt || 2}/3)...`;
     if (bot.status === 'error') return 'Fallo tras 3 intentos';

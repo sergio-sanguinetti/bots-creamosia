@@ -103,19 +103,17 @@ class BotManager {
       cleanUrl = `https://${cleanUrl}`;
     }
 
+    const BATCH_SIZE = 3;
+    const totalBatches = Math.ceil(employees.length / BATCH_SIZE);
     const launchedBots = [];
-    let accumulatedDelay = 0;
 
+    // Pre-registrar todos los bots en estado 'scheduled' con información de su bloque
     for (let index = 0; index < employees.length; index++) {
       const employee = employees[index];
       const botId = `bot_${uuidv4().substring(0, 8)}`;
-      
-      // Cumulative sequential delay between each bot (7-11s) so they never collide
-      const delayMs = index === 0 ? 0 : accumulatedDelay;
-      const stepDelay = staggeredDelay ? (Math.floor(Math.random() * 4000) + 7000) : 5000;
-      accumulatedDelay += stepDelay;
+      const batchNum = Math.floor(index / BATCH_SIZE) + 1;
 
-      // Auto-assign IP if employee has no IP assigned yet
+      // Auto-asignar IP si el empleado no tiene una asignada
       if (!employee.ipAddress || employee.ipAddress === 'Sin IP asignada') {
         const autoEmp = dataStore.autoAssignEmployeeIp(employee.id);
         if (autoEmp && autoEmp.ipAddress) {
@@ -144,7 +142,9 @@ class BotManager {
         ipIsp: employee.ipIsp || 'Telefónica de España',
         jitsiUrl: cleanUrl,
         status: 'scheduled',
-        scheduledTime: new Date(Date.now() + delayMs),
+        batchNumber: batchNum,
+        totalBatches: totalBatches,
+        scheduledTime: new Date(),
         connectedAt: null,
         durationMinutes: parseInt(durationMinutes, 10) || 30,
         autoMute: true
@@ -152,26 +152,59 @@ class BotManager {
 
       dataStore.addBot(botRecord);
       launchedBots.push(botRecord);
-
-      // Trigger bot launch in background with delay
-      setTimeout(() => {
-        this.runPuppeteerBot(botRecord, cleanUrl);
-      }, delayMs);
     }
+
+    // Procesar bloques de forma secuencial y asíncrona en segundo plano
+    (async () => {
+      console.log(`====================================================`);
+      console.log(`🚀 [BotManager] Iniciando proceso por bloques: ${employees.length} bots en ${totalBatches} bloques (Tamaño: ${BATCH_SIZE})`);
+      console.log(`====================================================`);
+
+      for (let b = 0; b < totalBatches; b++) {
+        const batchNum = b + 1;
+        const startIdx = b * BATCH_SIZE;
+        const endIdx = Math.min(startIdx + BATCH_SIZE, employees.length);
+        const batchBots = launchedBots.slice(startIdx, endIdx);
+
+        console.log(`\n📦 [Bloque ${batchNum}/${totalBatches}] Lanzando ${batchBots.length} bot(s): ${batchBots.map(bot => bot.employeeName).join(', ')}...`);
+
+        // Lanzar los bots del bloque actual con breve separación interna (3.5s)
+        const batchPromises = batchBots.map(async (botRecord, subIdx) => {
+          if (subIdx > 0 && staggeredDelay) {
+            await new Promise(r => setTimeout(r, subIdx * 3500));
+          }
+          return this.runPuppeteerBot(botRecord, cleanUrl, 1, batchNum, totalBatches);
+        });
+
+        // Esperar a que los bots del bloque confirmen su entrada en sala (o agoten intentos)
+        await Promise.allSettled(batchPromises);
+
+        console.log(`✅ [Bloque ${batchNum}/${totalBatches}] Finalizado el proceso de conexión.`);
+        if (b < totalBatches - 1) {
+          console.log(`⏳ Pausa de estabilización de 5 segundos antes del siguiente bloque...`);
+          await new Promise(r => setTimeout(r, 5000));
+        }
+      }
+
+      console.log(`\n🎉 [BotManager] Todos los ${totalBatches} bloques han sido procesados.`);
+    })().catch(err => {
+      console.error('[BotManager Batch Engine Error]:', err);
+    });
 
     return launchedBots;
   }
 
-  async runPuppeteerBot(botRecord, baseUrl, attemptCount = 1) {
+  async runPuppeteerBot(botRecord, baseUrl, attemptCount = 1, batchNumber = 1, totalBatches = 1) {
     const maxAttempts = 3;
     const { id: botId, employeeId, employeeName, companyName, ipAddress, ipCity, durationMinutes, login: recordLogin, pass: recordPass, dni: recordDni } = botRecord;
 
-    dataStore.updateBotStatus(botId, 'connecting', { attempt: attemptCount, maxAttempts });
+    const batchTag = `[Bloque ${batchNumber}/${totalBatches}]`;
+    dataStore.updateBotStatus(botId, 'connecting', { attempt: attemptCount, maxAttempts, batchNumber, totalBatches });
 
     if (attemptCount === 1 && ipAddress) {
-      dataStore.addBotLog(botId, `Conectando (Intento 1/${maxAttempts}) con IP España asignada: ${ipAddress} (${ipCity})`, 'info');
+      dataStore.addBotLog(botId, `${batchTag} Conectando (Intento 1/${maxAttempts}) con IP España: ${ipAddress} (${ipCity})`, 'info');
     } else {
-      dataStore.addBotLog(botId, `Iniciando intento ${attemptCount}/${maxAttempts} de conexión a la reunión...`, 'info');
+      dataStore.addBotLog(botId, `${batchTag} Intento ${attemptCount}/${maxAttempts} de conexión...`, 'info');
     }
 
     let browser = null;
@@ -599,6 +632,7 @@ class BotManager {
 
       // Keep reference to active instance
       this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval, botProfileDir });
+      return true;
 
     } catch (error) {
       console.error(`[Bot ${botId}] Error en intento ${attemptCount}/${maxAttempts}:`, error.message);
@@ -611,14 +645,14 @@ class BotManager {
       if (attemptCount < maxAttempts) {
         const nextAttempt = attemptCount + 1;
         dataStore.addBotLog(botId, `⚠️ Fallo en intento ${attemptCount}/${maxAttempts}: ${error.message}. Reintentando automáticamente (${nextAttempt}/${maxAttempts}) en 4 segundos...`, 'warning');
-        dataStore.updateBotStatus(botId, 'retrying', { attempt: attemptCount, nextAttempt, errorMsg: error.message });
+        dataStore.updateBotStatus(botId, 'retrying', { attempt: attemptCount, nextAttempt, batchNumber, totalBatches, errorMsg: error.message });
 
-        setTimeout(() => {
-          this.runPuppeteerBot(botRecord, baseUrl, nextAttempt);
-        }, 4000);
+        await new Promise(r => setTimeout(r, 4000));
+        return await this.runPuppeteerBot(botRecord, baseUrl, nextAttempt, batchNumber, totalBatches);
       } else {
         dataStore.addBotLog(botId, `✕ Fallo definitivo tras ${maxAttempts} intentos: ${error.message}`, 'error');
-        dataStore.updateBotStatus(botId, 'error', { attempt: maxAttempts, maxAttempts, errorMsg: `Fallo tras ${maxAttempts} intentos: ${error.message}` });
+        dataStore.updateBotStatus(botId, 'error', { attempt: maxAttempts, maxAttempts, batchNumber, totalBatches, errorMsg: `Fallo tras ${maxAttempts} intentos: ${error.message}` });
+        return false;
       }
     }
   }
