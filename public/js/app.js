@@ -1184,7 +1184,8 @@ document.addEventListener('DOMContentLoaded', () => {
       state.courses.forEach(crs => {
         const opt = document.createElement('option');
         opt.value = crs.id;
-        opt.textContent = `${crs.name} (${crs.city})`;
+        const courseName = crs.title || crs.name || 'Curso';
+        opt.textContent = crs.city ? `${courseName} [📍 ${crs.city}]` : courseName;
         el.meetingFilterCourse.appendChild(opt);
       });
       el.meetingFilterCourse.value = meetingModalFilters.courseId || '';
@@ -1275,8 +1276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setCustomDatePickerValue(d);
       }
       el.meetingFormDuration.value = meeting.durationMinutes || 30;
-      el.meetingFormAutoMute.checked = meeting.autoMute !== undefined ? meeting.autoMute : true;
-      el.meetingFormStaggered.checked = meeting.staggeredDelay !== undefined ? meeting.staggeredDelay : true;
     } else {
       el.meetingModalTitle.textContent = 'Programar Nueva Reunión';
       el.meetingForm.reset();
@@ -1320,8 +1319,8 @@ document.addEventListener('DOMContentLoaded', () => {
       scheduledTime: scheduledTime ? new Date(scheduledTime).toISOString() : new Date().toISOString(),
       durationMinutes,
       assignedEmployeeIds,
-      autoMute: el.meetingFormAutoMute.checked,
-      staggeredDelay: el.meetingFormStaggered.checked
+      autoMute: true,
+      staggeredDelay: true
     };
 
     const id = el.meetingEditId.value;
