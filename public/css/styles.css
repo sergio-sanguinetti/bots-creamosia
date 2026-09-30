@@ -465,9 +465,47 @@ h1, h2, h3, h4 {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
-.employee-item.selected {
-  background: rgba(10, 132, 255, 0.08);
-  border-color: rgba(10, 132, 255, 0.35);
+.employee-item.bot-active {
+  background: rgba(48, 209, 88, 0.04);
+  border-color: rgba(48, 209, 88, 0.25);
+}
+
+.employee-item.bot-active:hover {
+  background: rgba(48, 209, 88, 0.08);
+  border-color: rgba(48, 209, 88, 0.4);
+}
+
+.employee-item.marked-real {
+  background: rgba(255, 159, 10, 0.05);
+  border-color: rgba(255, 159, 10, 0.3);
+  opacity: 0.78;
+}
+
+.employee-item.marked-real:hover {
+  opacity: 0.95;
+}
+
+.mode-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.01em;
+}
+
+.mode-badge.badge-bot {
+  background: rgba(48, 209, 88, 0.15);
+  color: #30d158;
+  border: 1px solid rgba(48, 209, 88, 0.3);
+}
+
+.mode-badge.badge-real {
+  background: rgba(255, 159, 10, 0.15);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.35);
 }
 
 .emp-main-info {

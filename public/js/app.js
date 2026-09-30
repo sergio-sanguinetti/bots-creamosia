@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     spainCities: [],
     ipPool: [],
     meetings: [],
-    selectedEmployeeIds: new Set(),
+    markedRealEmployeeIds: new Set(), // IDs of students marked as Real Attendees (excluded from bot launch)
     activeBots: new Map(), // botId -> Bot object
     modalEmployee: null, // Employee currently open in IP modal
     modalSelectedIp: null, // Currently selected IP object in modal
@@ -344,6 +344,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.filterCompany) {
       el.filterCompany.addEventListener('change', (e) => {
         state.filters.companyId = e.target.value;
+        state.filters.courseId = ''; // Reset course filter when company changes
+        
+        const comp = state.companies.find(c => c.id === e.target.value);
+        if (comp && comp.defaultAulaUrl && el.jitsiUrl) {
+          el.jitsiUrl.value = comp.defaultAulaUrl;
+        }
+
+        renderCourseFilter();
         loadEmployees();
       });
     }
@@ -351,6 +359,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.filterCourse) {
       el.filterCourse.addEventListener('change', (e) => {
         state.filters.courseId = e.target.value;
+        const crs = state.courses.find(c => c.id === e.target.value);
+        if (crs && crs.fixedAulaUrl && el.jitsiUrl) {
+          el.jitsiUrl.value = crs.fixedAulaUrl;
+        }
         loadEmployees();
       });
     }
@@ -366,13 +378,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // Selection Buttons
+    // Selection Buttons (Checked = Real Attendee, Unchecked = Bot)
     if (el.btnSelectAll) {
       el.btnSelectAll.addEventListener('click', () => {
         const activeEmployeeIds = getActiveEmployeeIds();
         state.employees.forEach(emp => {
           if (!activeEmployeeIds.has(emp.id)) {
-            state.selectedEmployeeIds.add(emp.id);
+            state.markedRealEmployeeIds.add(emp.id);
           }
         });
         renderEmployeeList();
@@ -381,15 +393,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (el.btnDeselectAll) {
       el.btnDeselectAll.addEventListener('click', () => {
-        state.selectedEmployeeIds.clear();
+        state.markedRealEmployeeIds.clear();
         renderEmployeeList();
       });
     }
 
     if (el.btnAutoAssignIps) {
       el.btnAutoAssignIps.addEventListener('click', () => {
-        const selectedIds = Array.from(state.selectedEmployeeIds);
-        autoAssignIps(selectedIds.length > 0 ? selectedIds : null);
+        const activeEmployeeIds = getActiveEmployeeIds();
+        const botCandidateIds = state.employees
+          .filter(emp => !activeEmployeeIds.has(emp.id) && !state.markedRealEmployeeIds.has(emp.id))
+          .map(emp => emp.id);
+        autoAssignIps(botCandidateIds.length > 0 ? botCandidateIds : null);
       });
     }
 
@@ -460,12 +475,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Form Launch Bots
+    // Form Launch Bots (Launches all UNCHECKED employees as bots)
     el.botLaunchForm.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      if (state.selectedEmployeeIds.size === 0) {
-        alert('Por favor selecciona al menos un empleado para iniciar la asistencia.');
+      const activeEmployeeIds = getActiveEmployeeIds();
+      const botCandidates = state.employees.filter(emp => !activeEmployeeIds.has(emp.id) && !state.markedRealEmployeeIds.has(emp.id));
+
+      if (botCandidates.length === 0) {
+        alert('Todos los alumnos están marcados como asistentes reales (excluidos). Desmarca las casillas de los alumnos que quieras que se conecten como bots.');
         return;
       }
 
@@ -479,14 +497,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       el.btnLaunchBots.disabled = true;
-      el.btnLaunchBots.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Lanzando Bots...`;
+      el.btnLaunchBots.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Lanzando ${botCandidates.length} Bots...`;
 
       try {
         const res = await fetch('/api/bots/launch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            employeeIds: Array.from(state.selectedEmployeeIds),
+            employeeIds: botCandidates.map(emp => emp.id),
             jitsiUrl,
             durationMinutes,
             staggeredDelay,
@@ -497,7 +515,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (data.success) {
           showUploadStatus(`✓ ${data.message}`, 'success');
-          state.selectedEmployeeIds.clear();
           renderEmployeeList();
           updateSelectedCount();
         } else {
@@ -507,7 +524,6 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('Error al intentar lanzar bots: ' + err.message);
       } finally {
         el.btnLaunchBots.disabled = false;
-        el.btnLaunchBots.innerHTML = `<i class="fa-solid fa-play"></i> Iniciar Bots de Asistencia (<span id="btn-launch-count">${state.selectedEmployeeIds.size}</span>)`;
         updateSelectedCount();
       }
     });
@@ -586,6 +602,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.meetingFilterCompany) {
       el.meetingFilterCompany.addEventListener('change', (e) => {
         meetingModalFilters.companyId = e.target.value;
+        meetingModalFilters.courseId = ''; // Reset course when company changes
+        
+        // Auto-fill URL from company or first matching course
+        const comp = state.companies.find(c => c.id === e.target.value);
+        if (comp && comp.defaultAulaUrl && el.meetingFormUrl) {
+          el.meetingFormUrl.value = comp.defaultAulaUrl;
+        }
+
+        // Re-populate course dropdown for this company
+        populateMeetingCourseDropdown(e.target.value);
         renderMeetingEmployeesSelector();
       });
     }
@@ -593,6 +619,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (el.meetingFilterCourse) {
       el.meetingFilterCourse.addEventListener('change', (e) => {
         meetingModalFilters.courseId = e.target.value;
+        const crs = state.courses.find(c => c.id === e.target.value);
+        if (crs && crs.fixedAulaUrl && el.meetingFormUrl) {
+          el.meetingFormUrl.value = crs.fixedAulaUrl;
+        }
         renderMeetingEmployeesSelector();
       });
     }
@@ -729,12 +759,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderCourseFilter() {
     el.filterCourse.innerHTML = '<option value="">-- Todos los Cursos --</option>';
-    state.courses.forEach(course => {
+    const filteredCourses = state.filters.companyId
+      ? state.courses.filter(c => !c.companyId || c.companyId === state.filters.companyId)
+      : state.courses;
+
+    filteredCourses.forEach(course => {
       const opt = document.createElement('option');
       opt.value = course.id;
       opt.textContent = course.city ? `${course.title} [📍 ${course.city}]` : course.title;
       el.filterCourse.appendChild(opt);
     });
+    el.filterCourse.value = state.filters.courseId || '';
   }
 
   function renderEmployeeList() {
@@ -743,9 +778,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeEmployeeIds = getActiveEmployeeIds();
     const availableEmployees = state.employees.filter(emp => !activeEmployeeIds.has(emp.id));
 
-    state.selectedEmployeeIds.forEach(id => {
+    state.markedRealEmployeeIds.forEach(id => {
       if (activeEmployeeIds.has(id)) {
-        state.selectedEmployeeIds.delete(id);
+        state.markedRealEmployeeIds.delete(id);
       }
     });
     updateSelectedCount();
@@ -760,9 +795,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     availableEmployees.forEach(emp => {
-      const isSelected = state.selectedEmployeeIds.has(emp.id);
+      const isReal = state.markedRealEmployeeIds.has(emp.id);
       const item = document.createElement('div');
-      item.className = `employee-item ${isSelected ? 'selected' : ''}`;
+      item.className = `employee-item ${isReal ? 'marked-real' : 'bot-active'}`;
 
       const empCourses = (emp.courses || [])
         .map(cId => state.courses.find(c => c.id === cId))
@@ -774,15 +809,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const empCities = [...new Set(empCourses.map(c => c.city))];
 
+      const statusBadge = isReal
+        ? `<span class="mode-badge badge-real"><i class="fa-solid fa-user"></i> Asiste en Persona (Real)</span>`
+        : `<span class="mode-badge badge-bot"><i class="fa-solid fa-robot"></i> Conectará Bot</span>`;
+
       item.innerHTML = `
         <div class="emp-main-info">
-          <label class="checkbox-container">
-            <input type="checkbox" ${isSelected ? 'checked' : ''} data-id="${emp.id}">
+          <label class="checkbox-container" title="${isReal ? 'Desmarcar para que se conecte como bot' : 'Marcar si asiste en persona (para excluirlo de bot)'}">
+            <input type="checkbox" ${isReal ? 'checked' : ''} data-id="${emp.id}">
             <span class="checkmark"></span>
           </label>
           <div class="emp-details" style="width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-              <h4>${emp.name}</h4>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; flex-wrap: wrap;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <h4>${emp.name}</h4>
+                ${statusBadge}
+              </div>
               ${ipBadgeHtml}
             </div>
             <p><i class="fa-solid fa-building"></i> ${emp.companyName} | DNI: ${emp.dni}</p>
@@ -824,20 +866,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function toggleEmployeeSelection(empId, isChecked, itemElement) {
     if (isChecked) {
-      state.selectedEmployeeIds.add(empId);
-      itemElement.classList.add('selected');
+      state.markedRealEmployeeIds.add(empId);
+      itemElement.classList.add('marked-real');
+      itemElement.classList.remove('bot-active');
     } else {
-      state.selectedEmployeeIds.delete(empId);
-      itemElement.classList.remove('selected');
+      state.markedRealEmployeeIds.delete(empId);
+      itemElement.classList.remove('marked-real');
+      itemElement.classList.add('bot-active');
     }
-    updateSelectedCount();
+    renderEmployeeList();
   }
 
   function updateSelectedCount() {
-    const count = state.selectedEmployeeIds.size;
-    if (el.selectedCount) el.selectedCount.textContent = count;
+    const activeEmployeeIds = getActiveEmployeeIds();
+    const availableEmployees = state.employees.filter(emp => !activeEmployeeIds.has(emp.id));
+    const botCount = availableEmployees.filter(emp => !state.markedRealEmployeeIds.has(emp.id)).length;
+    
+    if (el.selectedCount) el.selectedCount.textContent = botCount;
     const launchCountSpan = document.getElementById('btn-launch-count');
-    if (launchCountSpan) launchCountSpan.textContent = count;
+    if (launchCountSpan) launchCountSpan.textContent = botCount;
+    if (el.btnLaunchBots) {
+      el.btnLaunchBots.innerHTML = `<i class="fa-solid fa-play"></i> Iniciar Bots de Asistencia (<span id="btn-launch-count">${botCount}</span>)`;
+    }
   }
 
   // --- TAB 2: Renders & Operations for Employee Management ---
@@ -1167,9 +1217,27 @@ document.addEventListener('DOMContentLoaded', () => {
     search: ''
   };
 
+  function populateMeetingCourseDropdown(companyId = '') {
+    if (!el.meetingFilterCourse) return;
+    el.meetingFilterCourse.innerHTML = '<option value="">-- Todos los Cursos / Aula Fija --</option>';
+    
+    const availableCourses = companyId
+      ? state.courses.filter(c => !c.companyId || c.companyId === companyId)
+      : state.courses;
+
+    availableCourses.forEach(crs => {
+      const opt = document.createElement('option');
+      opt.value = crs.id;
+      const courseName = crs.title || crs.name || 'Curso';
+      opt.textContent = crs.city ? `${courseName} [📍 ${crs.city}]` : courseName;
+      el.meetingFilterCourse.appendChild(opt);
+    });
+    el.meetingFilterCourse.value = meetingModalFilters.courseId || '';
+  }
+
   function populateMeetingFilterDropdowns() {
     if (el.meetingFilterCompany) {
-      el.meetingFilterCompany.innerHTML = '<option value="">-- Todas las Empresas --</option>';
+      el.meetingFilterCompany.innerHTML = '<option value="">-- Seleccionar Empresa --</option>';
       state.companies.forEach(comp => {
         const opt = document.createElement('option');
         opt.value = comp.id;
@@ -1179,17 +1247,7 @@ document.addEventListener('DOMContentLoaded', () => {
       el.meetingFilterCompany.value = meetingModalFilters.companyId || '';
     }
 
-    if (el.meetingFilterCourse) {
-      el.meetingFilterCourse.innerHTML = '<option value="">-- Todos los Cursos --</option>';
-      state.courses.forEach(crs => {
-        const opt = document.createElement('option');
-        opt.value = crs.id;
-        const courseName = crs.title || crs.name || 'Curso';
-        opt.textContent = crs.city ? `${courseName} [📍 ${crs.city}]` : courseName;
-        el.meetingFilterCourse.appendChild(opt);
-      });
-      el.meetingFilterCourse.value = meetingModalFilters.courseId || '';
-    }
+    populateMeetingCourseDropdown(meetingModalFilters.companyId || '');
 
     if (el.meetingSearchEmployee) {
       el.meetingSearchEmployee.value = meetingModalFilters.search || '';
@@ -1279,8 +1337,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       el.meetingModalTitle.textContent = 'Programar Nueva Reunión';
       el.meetingForm.reset();
-      el.meetingEditId.value = '';
-      el.meetingFormUrl.value = 'https://creamosia.com/aula-virtual/?sesion_id=17067';
+      const defaultUrl = (state.companies[0] && state.companies[0].defaultAulaUrl) 
+        ? state.companies[0].defaultAulaUrl 
+        : 'https://aula.creamosia.com/creamosia-orquestacionbots-17066';
+      el.meetingFormUrl.value = defaultUrl;
       const now = new Date();
       now.setMinutes(now.getMinutes() + 10);
       setCustomDatePickerValue(now);

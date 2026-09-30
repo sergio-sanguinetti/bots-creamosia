@@ -126,14 +126,19 @@
             <div class="card-header space-between">
               <div class="title-with-icon">
                 <i class="fa-solid fa-filter"></i>
-                <h2>2. Selección Múltiple de Empleados</h2>
+                <h2>2. Asistentes Reales y Bots a Conectar</h2>
               </div>
               <div class="select-counter-badge">
-                <span id="selected-count">0</span> Seleccionados
+                <span id="selected-count">0</span> Bots a Conectar
               </div>
             </div>
 
             <div class="card-body">
+              <div style="font-size: 0.8rem; color: var(--apple-text-secondary); margin-bottom: 0.85rem; padding: 0.6rem 0.85rem; background: rgba(10, 132, 255, 0.07); border: 1px solid rgba(10, 132, 255, 0.2); border-radius: var(--radius-sm);">
+                <i class="fa-solid fa-circle-info" style="color: var(--apple-blue); margin-right: 0.35rem;"></i>
+                <strong>Lógica de Lanzamiento:</strong> Los alumnos <strong>no marcados (desmarcados)</strong> se conectarán como <strong>Bots</strong>. Marca la casilla de los alumnos que asisten en persona (reales) para excluirlos.
+              </div>
+
               <!-- Filters -->
               <div class="filter-controls-row">
                 <div class="form-group flex-1">
@@ -154,17 +159,17 @@
               <div class="form-group margin-top-sm">
                 <div class="search-input-wrapper">
                   <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                  <input type="text" id="search-employee" class="form-control search-input" placeholder="Buscar por nombre o DNI de empleado...">
+                  <input type="text" id="search-employee" class="form-control search-input" placeholder="Buscar por nombre o DNI de alumno...">
                 </div>
               </div>
 
               <!-- Action Bar for Selection -->
               <div class="selection-actions-bar margin-top-sm">
-                <button id="btn-select-all" class="btn btn-outline btn-sm">
-                  <i class="fa-solid fa-square-check"></i> Seleccionar Todos
+                <button id="btn-select-all" class="btn btn-outline btn-sm" title="Marcar todos como alumnos reales (no lanzar bots)">
+                  <i class="fa-solid fa-user-check"></i> Marcar Reales
                 </button>
-                <button id="btn-deselect-all" class="btn btn-ghost btn-sm">
-                  <i class="fa-solid fa-square"></i> Desmarcar Todos
+                <button id="btn-deselect-all" class="btn btn-ghost btn-sm" title="Desmarcar todos para que todos se conecten como bots">
+                  <i class="fa-solid fa-robot"></i> Desmarcar (Conectar Bots)
                 </button>
                 <button id="btn-auto-assign-ips" class="btn btn-outline btn-sm margin-left-auto" style="border-color: var(--apple-cyan); color: var(--apple-cyan);">
                   <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-asignar IPs
@@ -196,7 +201,7 @@
               <form id="bot-launch-form">
                 <div class="form-group">
                   <label for="jitsi-url"><i class="fa-solid fa-video"></i> Enlace de la Sala Jitsi (Aula Virtual) *</label>
-                  <input type="url" id="jitsi-url" class="form-control" required placeholder="https://creamosia.com/aula-virtual/?sesion_id=17067" value="https://creamosia.com/aula-virtual/?sesion_id=17067">
+                  <input type="url" id="jitsi-url" class="form-control" required placeholder="https://aula.creamosia.com/creamosia-orquestacionbots-17066" value="https://aula.creamosia.com/creamosia-orquestacionbots-17066">
                 </div>
 
                 <div class="form-row margin-top-sm">
@@ -516,14 +521,34 @@
       <div class="modal-body">
         <form id="meeting-form">
           <input type="hidden" id="meeting-edit-id">
-          <div class="form-group">
+
+          <!-- 1. Empresa y Curso (Autocompletan URL y filtran lista) -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label><i class="fa-solid fa-building"></i> Empresa *</label>
+              <select id="meeting-filter-company" class="form-control" required>
+                <option value="">-- Seleccionar Empresa --</option>
+              </select>
+            </div>
+
+            <div class="form-group flex-1">
+              <label><i class="fa-solid fa-graduation-cap"></i> Curso (Aula Virtual) *</label>
+              <select id="meeting-filter-course" class="form-control">
+                <option value="">-- Todos los Cursos / Aula Fija --</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group margin-top-xs">
             <label>Título de la Reunión *</label>
             <input type="text" id="meeting-form-title" class="form-control" required placeholder="Ej. Sesión de Capacitación PRL - Grupo A">
           </div>
+
           <div class="form-group">
             <label>URL del Aula Virtual / Jitsi *</label>
-            <input type="url" id="meeting-form-url" class="form-control" required placeholder="https://creamosia.com/aula-virtual/?sesion_id=17067" value="https://creamosia.com/aula-virtual/?sesion_id=17067">
+            <input type="url" id="meeting-form-url" class="form-control" required placeholder="https://aula.creamosia.com/creamosia-orquestacionbots-17066" value="https://aula.creamosia.com/creamosia-orquestacionbots-17066">
           </div>
+
           <div class="form-row">
             <div class="form-group flex-1 custom-datepicker-container" id="custom-datetime-picker">
               <label>Fecha y Hora Programada *</label>
@@ -573,23 +598,6 @@
               <div class="select-all-inline">
                 <button type="button" id="meeting-select-all-emps" class="btn-link">Seleccionar Todos</button> | 
                 <button type="button" id="meeting-deselect-all-emps" class="btn-link">Desmarcar Todos</button>
-              </div>
-            </div>
-
-            <!-- Filtros de Empresa, Curso y Buscador en el Modal -->
-            <div class="form-row margin-top-xs">
-              <div class="form-group flex-1">
-                <label style="font-size: 0.8rem; font-weight: 600; color: var(--apple-text-secondary);"><i class="fa-solid fa-building"></i> Empresa:</label>
-                <select id="meeting-filter-company" class="form-control" style="font-size: 0.85rem; padding: 0.45rem 0.6rem;">
-                  <option value="">-- Todas las Empresas --</option>
-                </select>
-              </div>
-
-              <div class="form-group flex-1">
-                <label style="font-size: 0.8rem; font-weight: 600; color: var(--apple-text-secondary);"><i class="fa-solid fa-graduation-cap"></i> Curso:</label>
-                <select id="meeting-filter-course" class="form-control" style="font-size: 0.85rem; padding: 0.45rem 0.6rem;">
-                  <option value="">-- Todos los Cursos --</option>
-                </select>
               </div>
             </div>
 

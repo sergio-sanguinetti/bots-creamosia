@@ -1,9 +1,54 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const puppeteer = require('puppeteer');
 const { v4: uuidv4 } = require('uuid');
 const dataStore = require('./dataStore');
+
+function base64UrlEncode(str) {
+  return Buffer.from(str)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function generateJitsiJwt({ roomName, userId, name, email, secret = '9ab2800eb74405bb05aa57df2376e33ea5d5f961fd019dbc1d7967251d07ad8c', appId = 'creamosia_lms' }) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const payload = {
+    aud: 'jitsi',
+    iss: appId,
+    sub: 'meet.jitsi',
+    room: (roomName || '*').toLowerCase(),
+    iat: now,
+    nbf: now - 10,
+    exp: now + 3600 * 4,
+    context: {
+      user: {
+        id: userId || 'bot_user',
+        name: name || 'Alumno',
+        email: email || 'alumno@creamosia.com',
+        moderator: 'false'
+      }
+    }
+  };
+
+  const headerB64 = base64UrlEncode(JSON.stringify(header));
+  const payloadB64 = base64UrlEncode(JSON.stringify(payload));
+  const dataToSign = `${headerB64}.${payloadB64}`;
+
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(dataToSign)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+
+  return `${dataToSign}.${signature}`;
+}
 
 function getChromiumExecutablePath() {
   let envPath = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -330,7 +375,7 @@ class BotManager {
         }
       });
 
-      const isWordPressAulaVirtual = baseUrl.includes('aula-virtual') || baseUrl.includes('creamosia.com');
+      const isWordPressAulaVirtual = baseUrl.includes('aula-virtual') || baseUrl.includes('sesion_id=');
       let joinedSuccess = false;
 
       if (isWordPressAulaVirtual) {
@@ -429,7 +474,7 @@ class BotManager {
           }
         }
 
-        // Poll for Jitsi iframe and click Join meeting button reliably (up to 180 seconds to withstand concurrent load)
+        // Poll for Jitsi iframe and click Join meeting button reliably
         const maxWaitMs = 180000;
         const startTime = Date.now();
         let loopCount = 0;
@@ -438,7 +483,6 @@ class BotManager {
         while (Date.now() - startTime < maxWaitMs && !joinedSuccess) {
           loopCount++;
 
-          // If after several loops no iframe, try re-clicking #gc-entrar-sala if present
           if (loopCount % 6 === 0 && !joinButtonClicked) {
             const retryBtn = await page.$('#gc-entrar-sala').catch(() => null);
             if (retryBtn) {
@@ -451,7 +495,6 @@ class BotManager {
 
           if (jitsiFrame) {
             try {
-              // 1. Check if already inside conference room strictly via Jitsi APP API
               const isAlreadyJoined = await jitsiFrame.evaluate(() => {
                 if (window.APP && window.APP.conference && typeof window.APP.conference.isJoined === 'function') {
                   return window.APP.conference.isJoined() === true;
@@ -466,7 +509,6 @@ class BotManager {
                 break;
               }
 
-              // 2. Click prejoin button and let Jitsi enter the conference room
               if (!joinButtonClicked) {
                 const clickResult = await jitsiFrame.evaluate(() => {
                   const input = document.querySelector('input[type="text"]');
@@ -480,17 +522,14 @@ class BotManager {
                   for (const b of buttons) {
                     const aria = (b.getAttribute('aria-label') || '').toLowerCase();
                     const title = (b.getAttribute('title') || '').toLowerCase();
-                    // Solo silenciar si dice "silenciar" o "mute" (es decir, si estaba encendido)
                     if ((aria.includes('silenciar') || aria.includes('mute microphone') || title.includes('silenciar')) && !aria.includes('reactivar')) {
                       b.click();
                     }
-                    // Solo apagar cámara si dice "detener" o "stop" (es decir, si estaba encendida)
                     if ((aria.includes('detener') || aria.includes('stop camera') || title.includes('detener')) && !aria.includes('iniciar') && !aria.includes('activar')) {
                       b.click();
                     }
                   }
 
-                  // Find Join button
                   const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
                   const target = btns.find(b => {
                     const txt = (b.innerText || b.textContent || '').toLowerCase();
@@ -514,59 +553,144 @@ class BotManager {
                   dataStore.addBotLog(botId, `Bot hizo clic en botón prejoin "${clickResult}". Entrando a la sala...`, 'info');
                 }
               }
-            } catch (err) {
-              // Frame still loading
-            }
+            } catch (err) {}
           }
           await new Promise(r => setTimeout(r, 1500));
         }
 
-        // Post-join mute & low-bandwidth enforcement purely via Jitsi API
         const endFrames = page.frames();
         const finalJitsiFrame = endFrames.find(f => f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'));
         if (finalJitsiFrame) {
           await finalJitsiFrame.evaluate(async () => {
             if (window.APP && window.APP.conference) {
               try {
-                if (!window.APP.conference.isLocalAudioMuted()) {
-                  window.APP.conference.muteAudio(true);
-                }
-                if (!window.APP.conference.isLocalVideoMuted()) {
-                  window.APP.conference.muteVideo(true);
-                }
-                if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') {
-                  window.APP.conference.setReceiverVideoConstraint(0);
-                }
-                if (typeof window.APP.conference.setLastN === 'function') {
-                  window.APP.conference.setLastN(0);
-                }
+                if (!window.APP.conference.isLocalAudioMuted()) window.APP.conference.muteAudio(true);
+                if (!window.APP.conference.isLocalVideoMuted()) window.APP.conference.muteVideo(true);
+                if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') window.APP.conference.setReceiverVideoConstraint(0);
+                if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
               } catch (e) {}
             }
           }).catch(() => {});
           dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente (modo ahorro de ancho de banda LastN=0)', 'info');
         }
       } else {
-        // Navigate to direct Jitsi Meet
-        console.log(`[Bot ${botId}] Navegando a: ${fullJitsiUrl}`);
-        dataStore.addBotLog(botId, `Conectando a la reunión Jitsi: ${baseUrl}`, 'info');
-        await page.goto(fullJitsiUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+        // Direct Jitsi Meeting (e.g. https://aula.creamosia.com/creamosia-orquestacionbots-17066)
+        const employee = dataStore.getEmployees().find(e => e.id === employeeId);
+        const botName = botRecord.employeeName || (employee ? employee.name : 'Alumno');
+        const botDni = botRecord.dni || (employee ? employee.dni : '12345678A');
+        const botEmail = employee ? employee.email : `${botRecord.login || 'alumno'}@creamosia.com`;
 
-        await new Promise(r => setTimeout(r, 3000));
-
+        let roomName = 'sala';
         try {
-          const joinBtnSelector = 'div[role="button"][aria-label*="Join"], button[aria-label*="Unirse"], .action-btn';
-          const joinBtn = await page.$(joinBtnSelector);
-          if (joinBtn) {
-            await joinBtn.click();
-            dataStore.addBotLog(botId, 'Bot hizo clic en botón de entrada a la sala', 'info');
-          }
+          const parsed = new URL(baseUrl);
+          roomName = parsed.pathname.replace(/^\/+/, '').split('/')[0] || 'sala';
         } catch (e) {
-          // Hash parameters bypassed prejoin
+          const parts = baseUrl.split('/');
+          roomName = parts[parts.length - 1] || 'sala';
+        }
+
+        let targetUrl = baseUrl;
+        const configHash = '#config.prejoinPageEnabled=false&config.startWithAudioMuted=true&config.startWithVideoMuted=true&config.startSilent=true&config.channelLastN=0&config.resolution=72&config.disableSimulcast=true&config.disableRtx=true&config.disableAudioLevels=true&config.p2p.enabled=false&config.requireDisplayName=false';
+
+        if (!targetUrl.includes('jwt=')) {
+          const jwt = generateJitsiJwt({
+            roomName,
+            userId: botDni,
+            name: botName,
+            email: botEmail
+          });
+          const separator = targetUrl.includes('?') ? '&' : '?';
+          targetUrl = `${targetUrl}${separator}jwt=${jwt}${configHash}`;
+        } else if (!targetUrl.includes('#')) {
+          targetUrl = `${targetUrl}${configHash}`;
+        }
+
+        console.log(`[Bot ${botId}] Step 1: Navigating to Direct Jitsi: ${baseUrl}`);
+        dataStore.addBotLog(botId, `Conectando directamente a la sala Jitsi: ${baseUrl}...`, 'info');
+        await safeGoto(page, targetUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+
+        const maxWaitMs = 120000;
+        const startTime = Date.now();
+        let joinClicked = false;
+
+        while (Date.now() - startTime < maxWaitMs && !joinedSuccess) {
+          try {
+            const inConference = await page.evaluate(() => {
+              if (window.APP && window.APP.conference && typeof window.APP.conference.isJoined === 'function') {
+                return window.APP.conference.isJoined() === true;
+              }
+              return false;
+            }).catch(() => false);
+
+            if (inConference) {
+              console.log(`[Bot ${botId}] ✅ Confirmado: ¡Dentro de la reunión Jitsi directa!`);
+              dataStore.addBotLog(botId, 'Bot confirmado dentro de la conferencia Jitsi directa', 'success');
+              joinedSuccess = true;
+              break;
+            }
+
+            if (!joinClicked) {
+              const clicked = await page.evaluate((name) => {
+                const nameInp = document.querySelector('#premeeting-name-input, input[aria-label="Enter your name"], input[aria-label="Escribe tu nombre"], input[type="text"]');
+                if (nameInp && !nameInp.value) {
+                  nameInp.value = name;
+                  nameInp.dispatchEvent(new Event('input', { bubbles: true }));
+                  nameInp.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                for (const b of buttons) {
+                  const aria = (b.getAttribute('aria-label') || '').toLowerCase();
+                  if ((aria.includes('silenciar') || aria.includes('mute microphone')) && !aria.includes('reactivar')) {
+                    b.click();
+                  }
+                  if ((aria.includes('detener') || aria.includes('stop camera')) && !aria.includes('iniciar') && !aria.includes('activar')) {
+                    b.click();
+                  }
+                }
+
+                const joinBtn = document.querySelector('[data-testid="prejoin.joinMeeting"]') || 
+                                document.querySelector('div[aria-label="Join meeting"]') || 
+                                document.querySelector('div[aria-label="Entrar a la reunión"]') ||
+                                Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => (b.innerText || '').toLowerCase().includes('entrar a la reuni') || (b.innerText || '').toLowerCase().includes('join')) ||
+                                document.querySelector('.css-thld0a-actionButton.primary') ||
+                                document.querySelector('button.primary');
+                if (joinBtn) {
+                  joinBtn.click();
+                  return true;
+                }
+                return false;
+              }, botName).catch(() => false);
+
+              if (clicked) {
+                joinClicked = true;
+                console.log(`[Bot ${botId}] Clic en botón prejoin de entrada directa`);
+                await page.keyboard.press('Enter').catch(() => {});
+                dataStore.addBotLog(botId, 'Bot hizo clic en botón de entrada. Accediendo a la sala...', 'info');
+              }
+            }
+          } catch (e) {}
+
+          await new Promise(r => setTimeout(r, 1500));
+        }
+
+        if (joinedSuccess) {
+          await page.evaluate(() => {
+            try {
+              if (window.APP && window.APP.conference) {
+                if (!window.APP.conference.isLocalAudioMuted()) window.APP.conference.muteAudio(true);
+                if (!window.APP.conference.isLocalVideoMuted()) window.APP.conference.muteVideo(true);
+                if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') window.APP.conference.setReceiverVideoConstraint(0);
+                if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
+              }
+            } catch (e) {}
+          }).catch(() => {});
+          dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente (modo ahorro de ancho de banda LastN=0)', 'info');
         }
       }
 
-      if (isWordPressAulaVirtual && !joinedSuccess) {
-        throw new Error('No se pudo detectar o acceder a la sala Jitsi (el marco o el botón de entrada no respondieron a tiempo)');
+      if (!joinedSuccess) {
+        throw new Error('No se pudo detectar o acceder a la sala Jitsi (tiempo de espera agotado)');
       }
 
       // Record successful connection
@@ -604,27 +728,24 @@ class BotManager {
               window.dispatchEvent(new Event('mousemove'));
             }).catch(() => {});
 
+            const muteAndConstrain = () => {
+              if (window.APP && window.APP.conference) {
+                try {
+                  if (!window.APP.conference.isLocalAudioMuted()) window.APP.conference.muteAudio(true);
+                  if (!window.APP.conference.isLocalVideoMuted()) window.APP.conference.muteVideo(true);
+                  if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') window.APP.conference.setReceiverVideoConstraint(0);
+                  if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
+                } catch (e) {}
+              }
+            };
+
+            await page.evaluate(muteAndConstrain).catch(() => {});
+
             const frames = page.frames();
-            const jitsiFrame = frames.find(f => f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'));
-            if (jitsiFrame) {
-              await jitsiFrame.evaluate(() => {
-                if (window.APP && window.APP.conference) {
-                  try {
-                    if (!window.APP.conference.isLocalAudioMuted()) {
-                      window.APP.conference.muteAudio(true);
-                    }
-                    if (!window.APP.conference.isLocalVideoMuted()) {
-                      window.APP.conference.muteVideo(true);
-                    }
-                    if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') {
-                      window.APP.conference.setReceiverVideoConstraint(0);
-                    }
-                    if (typeof window.APP.conference.setLastN === 'function') {
-                      window.APP.conference.setLastN(0);
-                    }
-                  } catch (e) {}
-                }
-              }).catch(() => {});
+            for (const f of frames) {
+              if (f !== page.mainFrame() && (f.url().includes('aula.creamosia.com') || f.url().includes('jitsi'))) {
+                await f.evaluate(muteAndConstrain).catch(() => {});
+              }
             }
           }
         } catch (e) {}

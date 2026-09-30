@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const mongo = require('./mongo');
 
 class DataStore {
   constructor() {
@@ -16,9 +17,145 @@ class DataStore {
     this.seedInitialData();
     // Load persisted state from disk
     this.loadFromDisk();
+    // Initialize MongoDB Atlas connection & cloud data sync
+    this.initMongo().catch(err => console.error('[MongoDB Startup Error]:', err.message));
   }
 
-  saveToDisk() {
+  async initMongo() {
+    try {
+      const connected = await mongo.connectMongo();
+      if (connected) {
+        const [companies, courses, employees, meetings, ipPool] = await Promise.all([
+          mongo.Company.find({}).lean(),
+          mongo.Course.find({}).lean(),
+          mongo.Employee.find({}).lean(),
+          mongo.Meeting.find({}).lean(),
+          mongo.IpPool.find({}).lean()
+        ]);
+
+        if (employees.length > 0) {
+          this.employees = employees.map(e => ({
+            id: e.id,
+            name: e.name,
+            companyId: e.companyId,
+            companyName: e.companyName,
+            dni: e.dni,
+            email: e.email,
+            login: e.login,
+            pass: e.pass,
+            courses: e.courses || [],
+            ipAddress: e.ipAddress,
+            ipCity: e.ipCity,
+            ipRegion: e.ipRegion,
+            ipIsp: e.ipIsp
+          }));
+          if (companies.length > 0) this.companies = companies.map(c => ({ id: c.id, name: c.name, defaultAulaUrl: c.defaultAulaUrl, slug: c.slug }));
+          if (courses.length > 0) this.courses = courses.map(c => ({ id: c.id, wp_id: c.wp_id, title: c.title, companyId: c.companyId, companyName: c.companyName, fixedAulaUrl: c.fixedAulaUrl, city: c.city, region: c.region }));
+          if (meetings.length > 0) this.scheduledMeetings = meetings.map(m => ({ id: m.id, title: m.title, jitsiUrl: m.jitsiUrl, scheduledTime: m.scheduledTime, durationMinutes: m.durationMinutes, assignedEmployeeIds: m.assignedEmployeeIds, autoMute: m.autoMute, staggeredDelay: m.staggeredDelay, status: m.status, createdAt: m.createdAt }));
+          if (ipPool.length > 0) this.ipPool = ipPool.map(i => ({ id: i.id, ip: i.ip, city: i.city, region: i.region, isp: i.isp }));
+          console.log(`[MongoDB] Cargados ${this.employees.length} empleados, ${this.companies.length} empresas, ${this.courses.length} cursos y ${this.scheduledMeetings.length} reuniones desde MongoDB Atlas.`);
+          this.saveToDisk(false); // Update local backup without re-triggering Mongo sync
+        } else {
+          console.log(`[MongoDB] Colección vacía en Atlas. Sembrando ${this.employees.length} empleados y datos actuales en MongoDB...`);
+          await this.syncAllToMongo();
+        }
+      }
+    } catch (err) {
+      console.error('[MongoDB Sync Error]:', err.message);
+    }
+  }
+
+  async syncAllToMongo() {
+    if (!mongo.isConnected()) return;
+    try {
+      // Sync companies
+      if (this.companies && this.companies.length > 0) {
+        const compOps = this.companies.map(c => ({
+          updateOne: {
+            filter: { id: c.id },
+            update: { $set: { name: c.name, defaultAulaUrl: c.defaultAulaUrl || '', slug: c.slug || '' } },
+            upsert: true
+          }
+        }));
+        await mongo.Company.bulkWrite(compOps, { ordered: false }).catch(() => {});
+      }
+
+      // Sync courses
+      if (this.courses && this.courses.length > 0) {
+        const crsOps = this.courses.map(c => ({
+          updateOne: {
+            filter: { id: c.id },
+            update: { $set: { title: c.title, wp_id: c.wp_id, companyId: c.companyId || '', companyName: c.companyName || '', fixedAulaUrl: c.fixedAulaUrl || '', city: c.city || 'Madrid', region: c.region || 'Comunidad de Madrid' } },
+            upsert: true
+          }
+        }));
+        await mongo.Course.bulkWrite(crsOps, { ordered: false }).catch(() => {});
+      }
+
+      // Sync employees
+      if (this.employees && this.employees.length > 0) {
+        const empOps = this.employees.map(e => ({
+          updateOne: {
+            filter: { id: e.id },
+            update: { $set: {
+              name: e.name,
+              companyId: e.companyId || '',
+              companyName: e.companyName || '',
+              dni: e.dni || '',
+              email: e.email || '',
+              login: e.login || '',
+              pass: e.pass || '',
+              courses: e.courses || [],
+              ipAddress: e.ipAddress || null,
+              ipCity: e.ipCity || null,
+              ipRegion: e.ipRegion || null,
+              ipIsp: e.ipIsp || null
+            } },
+            upsert: true
+          }
+        }));
+        await mongo.Employee.bulkWrite(empOps, { ordered: false }).catch(() => {});
+      }
+
+      // Sync meetings
+      if (this.scheduledMeetings && this.scheduledMeetings.length > 0) {
+        const meetOps = this.scheduledMeetings.map(m => ({
+          updateOne: {
+            filter: { id: m.id },
+            update: { $set: {
+              title: m.title,
+              jitsiUrl: m.jitsiUrl,
+              scheduledTime: m.scheduledTime,
+              durationMinutes: m.durationMinutes || 30,
+              assignedEmployeeIds: m.assignedEmployeeIds || [],
+              autoMute: m.autoMute !== undefined ? m.autoMute : true,
+              staggeredDelay: m.staggeredDelay !== undefined ? m.staggeredDelay : true,
+              status: m.status || 'scheduled',
+              createdAt: m.createdAt || new Date().toISOString()
+            } },
+            upsert: true
+          }
+        }));
+        await mongo.Meeting.bulkWrite(meetOps, { ordered: false }).catch(() => {});
+      }
+
+      // Sync IP Pool
+      if (this.ipPool && this.ipPool.length > 0) {
+        const ipOps = this.ipPool.map(i => ({
+          updateOne: {
+            filter: { id: i.id },
+            update: { $set: { ip: i.ip, city: i.city, region: i.region, isp: i.isp || 'Telefónica de España' } },
+            upsert: true
+          }
+        }));
+        await mongo.IpPool.bulkWrite(ipOps, { ordered: false }).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[MongoDB Sync Warning]:', err.message);
+    }
+  }
+
+  saveToDisk(syncMongo = true) {
     try {
       const dir = path.dirname(this.dataPath);
       if (!fs.existsSync(dir)) {
@@ -31,6 +168,10 @@ class DataStore {
         scheduledMeetings: this.scheduledMeetings
       };
       fs.writeFileSync(this.dataPath, JSON.stringify(dataToSave, null, 2), 'utf8');
+
+      if (syncMongo) {
+        this.syncAllToMongo().catch(err => console.warn('[MongoDB Async Save Warning]:', err.message));
+      }
     } catch (err) {
       console.error('[DataStore Save Error]:', err.message);
     }
@@ -367,7 +508,15 @@ class DataStore {
         throw new Error('Respuesta inválida de la API REST de WordPress');
       }
 
-      // Preserve previously assigned IPs if student was already present
+      // Update companies and courses if provided by WP endpoint
+      if (Array.isArray(data.companies) && data.companies.length > 0) {
+        this.companies = data.companies;
+      }
+      if (Array.isArray(data.courses) && data.courses.length > 0) {
+        this.courses = data.courses;
+      }
+
+      // Preserve previously assigned IPs and passwords if student was already present
       const existingMap = new Map();
       for (const e of this.employees) {
         const key = e.login || e.dni || e.id;
@@ -384,20 +533,24 @@ class DataStore {
         const compName = wpEmp.companyName || 'ORQUESTACION BOTS';
         companiesSet.add(compName);
 
+        const empCourses = (Array.isArray(wpEmp.courses) && wpEmp.courses.length > 0)
+          ? wpEmp.courses
+          : (existing && existing.courses && existing.courses.length > 0 ? existing.courses : ['course_17066']);
+
         const empObj = {
-          id: wpEmp.id || `emp_wp_${wpEmp.wp_user_id || i + 1}`,
+          id: wpEmp.id || (wpEmp.conf_id ? `emp_conf_${wpEmp.conf_id}` : `emp_wp_${i + 1}`),
           name: wpEmp.name || wpEmp.login,
           login: wpEmp.login,
           pass: existing && existing.pass ? existing.pass : (wpEmp.login && wpEmp.login.includes('alumno_orq') ? `AlumnoOrq2026!${wpEmp.login.replace('alumno_orq_', '')}` : '123456'),
           dni: wpEmp.dni || '',
           email: wpEmp.email || '',
-          companyId: `comp_${compName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          companyId: wpEmp.companyId || `comp_${compName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
           companyName: compName,
-          courses: existing && existing.courses && existing.courses.length > 0 ? existing.courses : ['course_17066'],
-          ipAddress: existing ? existing.ipAddress : null,
-          ipCity: existing ? existing.ipCity : null,
-          ipRegion: existing ? existing.ipRegion : null,
-          ipIsp: existing ? existing.ipIsp : null
+          courses: empCourses,
+          ipAddress: (existing && existing.ipAddress) ? existing.ipAddress : (wpEmp.ip || null),
+          ipCity: (existing && existing.ipCity) ? existing.ipCity : null,
+          ipRegion: (existing && existing.ipRegion) ? existing.ipRegion : null,
+          ipIsp: (existing && existing.ipIsp) ? existing.ipIsp : null
         };
 
         // If employee has no IP assigned yet, auto-assign from Spain pool
@@ -414,13 +567,15 @@ class DataStore {
         newEmployees.push(empObj);
       }
 
-      // Rebuild companies based on synced dataset
-      this.companies = Array.from(companiesSet).map(cName => ({
-        id: `comp_${cName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-        name: cName
-      }));
+      // If companies weren't in response, fallback to rebuild from dataset
+      if (!Array.isArray(data.companies) || data.companies.length === 0) {
+        this.companies = Array.from(companiesSet).map(cName => ({
+          id: `comp_${cName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+          name: cName
+        }));
+      }
 
-      // Reemplazo total de la lista de empleados
+      // Total replacement with synchronized records
       this.employees = newEmployees;
 
       this.broadcastUpdate('DATA_IMPORTED', {
@@ -672,6 +827,9 @@ class DataStore {
     if (index === -1) return false;
     const removed = this.employees.splice(index, 1)[0];
     this.broadcastUpdate('EMPLOYEE_DELETED', { id: removed.id });
+    if (mongo.isConnected()) {
+      mongo.Employee.deleteOne({ id: removed.id }).catch(() => {});
+    }
     this.saveToDisk();
     return true;
   }
@@ -721,6 +879,9 @@ class DataStore {
     if (index === -1) return false;
     const removed = this.scheduledMeetings.splice(index, 1)[0];
     this.broadcastUpdate('MEETING_DELETED', { id: removed.id });
+    if (mongo.isConnected()) {
+      mongo.Meeting.deleteOne({ id: removed.id }).catch(() => {});
+    }
     this.saveToDisk();
     return true;
   }
