@@ -269,13 +269,6 @@ class BotManager {
         '--disable-gpu',
         '--disable-software-rasterizer',
         '--disable-accelerated-2d-canvas',
-        '--disable-accelerated-video-decode',
-        '--disable-accelerated-video-encode',
-        '--disable-gpu-compositing',
-        '--disable-webgl',
-        '--disable-3d-apis',
-        '--disable-gl-drawing-for-tests',
-        '--blink-settings=imagesEnabled=false',
         '--no-first-run',
         '--no-zygote',
         '--renderer-process-limit=1',
@@ -285,10 +278,10 @@ class BotManager {
         '--disable-backgrounding-occluded-windows',
         '--disable-breakpad',
         '--disable-component-update',
-        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,AudioServiceOutOfProcess',
+        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
         '--disable-renderer-backgrounding',
         '--disable-ipc-flooding-protection',
-        '--js-flags=--max-old-space-size=48 --expose-gc',
+        '--js-flags=--max-old-space-size=96',
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         '--mute-audio',
@@ -296,7 +289,7 @@ class BotManager {
         '--disable-permissions-api',
         '--disable-web-security',
         '--autoplay-policy=no-user-gesture-required',
-        '--window-size=320,240'
+        '--window-size=800,600'
       ];
 
       // Feed 100% silent WAV audio file into fake microphone instead of default 440Hz test tone / beep
@@ -339,8 +332,7 @@ class BotManager {
           url.includes('googletagmanager') ||
           url.includes('facebook') ||
           url.includes('hotjar') ||
-          url.includes('clarity.ms') ||
-          url.includes('callstats')
+          url.includes('clarity.ms')
         ) {
           req.abort().catch(() => {});
         } else {
@@ -358,8 +350,8 @@ class BotManager {
       // Select random realistic User-Agent for this bot
       const selectedUserAgent = USER_AGENTS_POOL[Math.floor(Math.random() * USER_AGENTS_POOL.length)];
 
-      // Set ultra-low memory browser viewport (320x240) & unique user agent
-      await page.setViewport({ width: 320, height: 240 });
+      // Set optimized browser viewport & unique user agent
+      await page.setViewport({ width: 800, height: 600 });
       await page.setUserAgent(selectedUserAgent);
 
       // Guarantee 100% silent audio & blank video at Browser API level
@@ -578,12 +570,6 @@ class BotManager {
                 if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
               } catch (e) {}
             }
-            // Ultra-low RAM & CPU mode: throttle animation loops and purge heavy UI nodes
-            try {
-              window.requestAnimationFrame = () => 0;
-              window.cancelAnimationFrame = () => {};
-              document.querySelectorAll('#filmstripRemoteVideos, #largeVideoWrapper, .videocontainer, svg, canvas, video, .avatar').forEach(el => el.remove());
-            } catch (e) {}
           }).catch(() => {});
           dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente (modo ahorro de ancho de banda LastN=0)', 'info');
         }
@@ -697,11 +683,6 @@ class BotManager {
                 if (typeof window.APP.conference.setReceiverVideoConstraint === 'function') window.APP.conference.setReceiverVideoConstraint(0);
                 if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
               }
-              // Ultra-low RAM & CPU: Disable rendering loops & remove heavy DOM elements
-              window.requestAnimationFrame = () => 0;
-              window.cancelAnimationFrame = () => {};
-              document.querySelectorAll('#filmstripRemoteVideos, #largeVideoWrapper, .videocontainer, svg, canvas, video, .avatar').forEach(el => el.remove());
-              if (window.gc) window.gc();
             } catch (e) {}
           }).catch(() => {});
           dataStore.addBotLog(botId, 'Micrófono y cámara silenciados correctamente (modo ahorro de ancho de banda LastN=0)', 'info');
@@ -735,7 +716,7 @@ class BotManager {
         }, timeoutMs);
       }
 
-      // Recurring interval to keep WordPress attendance ping alive and Jitsi strictly muted (every 15 seconds)
+      // Recurring interval to keep WordPress attendance ping alive and Jitsi strictly muted (every 10 seconds)
       muteCheckInterval = setInterval(async () => {
         try {
           if (page && !page.isClosed()) {
@@ -756,10 +737,6 @@ class BotManager {
                   if (typeof window.APP.conference.setLastN === 'function') window.APP.conference.setLastN(0);
                 } catch (e) {}
               }
-              // Clean any newly created video or canvas elements
-              try {
-                document.querySelectorAll('video, canvas, svg').forEach(el => el.remove());
-              } catch (e) {}
             };
 
             await page.evaluate(muteAndConstrain).catch(() => {});
@@ -772,7 +749,7 @@ class BotManager {
             }
           }
         } catch (e) {}
-      }, 15000);
+      }, 10000);
 
       // Keep reference to active instance
       this.activeInstances.set(botId, { browser, page, timer, muteCheckInterval, botProfileDir });
