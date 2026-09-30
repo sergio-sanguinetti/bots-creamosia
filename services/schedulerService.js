@@ -80,15 +80,15 @@ class SchedulerService {
             await botManager.launchBots({
               employeeIds: meeting.assignedEmployeeIds,
               jitsiUrl: meeting.jitsiUrl,
-              durationMinutes: meeting.durationMinutes || 30,
+              durationMinutes: meeting.durationMinutes || 120,
               staggeredDelay: meeting.staggeredDelay !== undefined ? meeting.staggeredDelay : true,
               autoMute: meeting.autoMute !== undefined ? meeting.autoMute : true
             });
 
             // Schedule completion timer
-            const durationMs = (meeting.durationMinutes || 30) * 60 * 1000;
+            const durationMs = (meeting.durationMinutes || 120) * 60 * 1000;
             setTimeout(() => {
-              console.log(`[SchedulerService] 🏁 Reunión "${meeting.title}" ha finalizado su duración programada (${meeting.durationMinutes || 30} min).`);
+              console.log(`[SchedulerService] 🏁 Reunión "${meeting.title}" ha finalizado su duración programada (${meeting.durationMinutes || 120} min).`);
               dataStore.updateMeeting(meeting.id, { status: 'completed', endedAt: new Date().toISOString() });
             }, durationMs);
 

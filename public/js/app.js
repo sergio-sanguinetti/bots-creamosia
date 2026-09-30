@@ -1174,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="meeting-detail-row">
               <i class="fa-solid fa-clock"></i>
-              <span>${formattedDate} (${meeting.durationMinutes || 30} min)</span>
+              <span>${formattedDate} (${meeting.durationMinutes || 120} min)</span>
             </div>
             <div class="meeting-detail-row">
               <i class="fa-solid fa-users"></i>
@@ -1333,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const d = new Date(meeting.scheduledTime);
         setCustomDatePickerValue(d);
       }
-      el.meetingFormDuration.value = meeting.durationMinutes || 30;
+      el.meetingFormDuration.value = meeting.durationMinutes || 120;
     } else {
       el.meetingModalTitle.textContent = 'Programar Nueva Reunión';
       el.meetingForm.reset();
@@ -1344,7 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const now = new Date();
       now.setMinutes(now.getMinutes() + 10);
       setCustomDatePickerValue(now);
-      el.meetingFormDuration.value = 30;
+      el.meetingFormDuration.value = 120;
     }
 
     closeCustomDatePicker();

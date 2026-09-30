@@ -51,7 +51,7 @@ const MeetingSchema = new mongoose.Schema({
   title: { type: String, required: true },
   jitsiUrl: { type: String, required: true },
   scheduledTime: { type: String, required: true },
-  durationMinutes: { type: Number, default: 30 },
+  durationMinutes: { type: Number, default: 120 },
   assignedEmployeeIds: { type: [String], default: [] },
   autoMute: { type: Boolean, default: true },
   staggeredDelay: { type: Boolean, default: true },

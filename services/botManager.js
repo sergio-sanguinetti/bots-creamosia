@@ -133,7 +133,7 @@ class BotManager {
     }
   }
 
-  async launchBots({ employeeIds, jitsiUrl, durationMinutes = 30, staggeredDelay = true, autoMute = true }) {
+  async launchBots({ employeeIds, jitsiUrl, durationMinutes = 120, staggeredDelay = true, autoMute = true }) {
     const activeBots = dataStore.getActiveBots();
     const activeEmployeeIds = new Set(activeBots.map(b => b.employeeId));
 
@@ -191,7 +191,7 @@ class BotManager {
         totalBatches: totalBatches,
         scheduledTime: new Date(),
         connectedAt: null,
-        durationMinutes: parseInt(durationMinutes, 10) || 30,
+        durationMinutes: parseInt(durationMinutes, 10) || 120,
         autoMute: true
       };
 
