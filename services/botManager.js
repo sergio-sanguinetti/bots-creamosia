@@ -278,10 +278,17 @@ class BotManager {
         '--disable-backgrounding-occluded-windows',
         '--disable-breakpad',
         '--disable-component-update',
-        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints',
+        '--disable-features=Translate,BackForwardCache,AcceptCHFrame,MediaRouter,OptimizationHints,AudioServiceOutOfProcess',
         '--disable-renderer-backgrounding',
         '--disable-ipc-flooding-protection',
-        '--js-flags=--max-old-space-size=96',
+        '--disable-smooth-scrolling',
+        '--disable-threaded-scrolling',
+        '--disable-threaded-animation',
+        '--disable-speech-api',
+        '--disable-canvas-aa',
+        '--disable-2d-canvas-clip-aa',
+        '--disable-gl-drawing-for-tests',
+        '--js-flags=--max-old-space-size=64',
         '--use-fake-ui-for-media-stream',
         '--use-fake-device-for-media-stream',
         '--mute-audio',
@@ -289,7 +296,7 @@ class BotManager {
         '--disable-permissions-api',
         '--disable-web-security',
         '--autoplay-policy=no-user-gesture-required',
-        '--window-size=800,600'
+        '--window-size=600,400'
       ];
 
       // Feed 100% silent WAV audio file into fake microphone instead of default 440Hz test tone / beep
@@ -675,6 +682,11 @@ class BotManager {
         }
 
         if (joinedSuccess) {
+          // Pause heavy CSS animation and video rasterization safely without altering DOM state
+          await page.addStyleTag({
+            content: 'video, audio, .filmstrip, .videocontainer { visibility: hidden !important; opacity: 0 !important; } * { animation-duration: 0.001s !important; transition-duration: 0.001s !important; }'
+          }).catch(() => {});
+
           await page.evaluate(() => {
             try {
               if (window.APP && window.APP.conference) {
